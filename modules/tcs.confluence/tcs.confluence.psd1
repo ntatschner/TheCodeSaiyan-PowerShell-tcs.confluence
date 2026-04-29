@@ -33,7 +33,7 @@ Copyright = '(c) 2025 Nigel Tatschner. All rights reserved.'
 Description = 'Functions to work with Confluence documents'
 
 # Minimum version of the PowerShell engine required by this module
-# PowerShellVersion = ''
+PowerShellVersion = '5.1'
 
 # Name of the PowerShell host required by this module
 # PowerShellHostName = ''
@@ -51,7 +51,7 @@ Description = 'Functions to work with Confluence documents'
 # ProcessorArchitecture = ''
 
 # Modules that must be imported into the global environment prior to importing this module
-RequiredModules = @('rsy.core')
+RequiredModules = @('tcs.core')
 
 # Assemblies that must be loaded prior to importing this module
 # RequiredAssemblies = @()
