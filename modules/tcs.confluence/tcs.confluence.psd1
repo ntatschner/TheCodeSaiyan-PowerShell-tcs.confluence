@@ -3,7 +3,7 @@
     ModuleVersion        = '0.1.0'
     GUID                 = '8e75db44-4f93-4ab4-b151-06ec760efb21'
     Author               = 'Nigel Tatschner'
-    CompanyName          = 'Rothesay'
+    CompanyName          = 'TheCodeSaiyan'
     Copyright            = '(c) 2025-2026 Nigel Tatschner. All rights reserved.'
     Description          = 'Functions to work with Confluence Cloud: a REST client (pages and spaces) and builders for Confluence storage-format content such as headings, tables, code blocks, links, layouts and tables of contents.'
     CompatiblePSEditions = @('Desktop', 'Core')
