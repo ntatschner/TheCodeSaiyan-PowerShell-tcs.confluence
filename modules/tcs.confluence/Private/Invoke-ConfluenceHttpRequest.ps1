@@ -160,6 +160,9 @@ function Get-ConfluenceRetryAfterValue {
     )
 
     if ($null -eq $Headers) { return }
+    # Dictionaries (PowerShell 7, and Windows PowerShell for successful responses) throw for a
+    # missing key; WebHeaderCollection returns $null
+    if ($Headers -is [System.Collections.IDictionary] -and -not ([System.Collections.IDictionary]$Headers).Contains('Retry-After')) { return }
     $value = $null
     try {
         $value = $Headers['Retry-After']
