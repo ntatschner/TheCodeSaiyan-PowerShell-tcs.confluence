@@ -8,8 +8,10 @@ function New-ConfluencePage {
         body is sent in storage format.
 
         When Confluence reports that a page with the same title already exists and -Force is given,
-        the existing page with exactly that title (preferring the one under -ParentId) is updated with
-        the new content as a new version. Without -Force the conflict is reported as an error.
+        the existing page with exactly that title in the same space (preferring the one under
+        -ParentId) is updated with the new content as a new version. A page in another space is never
+        updated, and when several pages could match an error is reported instead of choosing one.
+        Without -Force the conflict is reported as an error.
 
         If Confluence reports any other error but a page with exactly this title under this parent
         exists afterwards (Confluence sometimes creates the page and still returns an error), that page
@@ -17,8 +19,10 @@ function New-ConfluencePage {
 
         Supports -WhatIf and -Confirm. Returns the created or updated page.
 
-    .PARAMETER SpaceKey
-        The numeric ID of the space to create the page in (the v2 API field spaceId).
+    .PARAMETER SpaceId
+        The numeric ID of the space to create the page in (the v2 API field spaceId). A space key such
+        as DOCS is also accepted and resolved to the ID. -SpaceKey is an alias of this parameter
+        (the name used before 0.2.0).
 
     .PARAMETER ParentId
         The ID of the parent page.
@@ -38,14 +42,14 @@ function New-ConfluencePage {
         content of that page.
 
     .EXAMPLE
-        New-ConfluencePage -SpaceKey 98765 -ParentId 1000 -Title 'Release 1.2' -Status current -Content '<p>Notes</p>'
+        New-ConfluencePage -SpaceId 98765 -ParentId 1000 -Title 'Release 1.2' -Status current -Content '<p>Notes</p>'
 
         Creates the page "Release 1.2" under page 1000.
 
     .EXAMPLE
-        New-ConfluencePage -SpaceKey 98765 -ParentId 1000 -Title 'Daily report' -Status current -Content $html -Force
+        New-ConfluencePage -SpaceId DOCS -ParentId 1000 -Title 'Daily report' -Status current -Content $html -Force
 
-        Creates the page, or replaces the content of the existing "Daily report" page.
+        Creates the page in the DOCS space, or replaces the content of the existing "Daily report" page.
 
     .OUTPUTS
         System.Management.Automation.PSCustomObject. The created or updated page.
@@ -53,8 +57,9 @@ function New-ConfluencePage {
     [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
     [OutputType([pscustomobject])]
     param (
-        [Parameter(Mandatory = $true, HelpMessage = 'The space ID.')]
-        [string]$SpaceKey,
+        [Parameter(Mandatory = $true, HelpMessage = 'The space ID (or a space key, which is resolved to the ID).')]
+        [Alias('SpaceKey')]
+        [string]$SpaceId,
 
         [Parameter(Mandatory = $true, HelpMessage = 'The ID of the parent page.')]
         [string]$ParentId,
@@ -87,13 +92,20 @@ function New-ConfluencePage {
 
     process {
         try {
-            Write-Verbose "Creating Confluence page '$Title' in space '$SpaceKey' with parent ID '$ParentId'"
-            if (-not $PSCmdlet.ShouldProcess("Confluence page '$Title' in space $SpaceKey", 'Create')) {
+            Write-Verbose "Creating Confluence page '$Title' in space '$SpaceId' with parent ID '$ParentId'"
+            if (-not $PSCmdlet.ShouldProcess("Confluence page '$Title' in space $SpaceId", 'Create')) {
+                return
+            }
+            try {
+                $resolvedSpaceId = Resolve-ConfluenceSpaceId -Space $SpaceId -ErrorAction Stop
+            }
+            catch {
+                Write-Error "Failed to create page '$Title': $($_.Exception.Message)"
                 return
             }
 
             $body = @{
-                spaceId  = $SpaceKey
+                spaceId  = $resolvedSpaceId
                 status   = $Status
                 title    = $Title
                 parentId = $ParentId
@@ -104,7 +116,7 @@ function New-ConfluencePage {
             }
 
             try {
-                $response = Invoke-ConfluenceRequest -Method POST -Resource pages -Body ($body | ConvertTo-Json -Depth 10) -MaxQueryPages 1 -ErrorAction Stop
+                $response = Invoke-ConfluenceRequest -Method POST -Resource pages -ApiVersion 2 -Body ($body | ConvertTo-Json -Depth 10) -MaxQueryPages 1 -ErrorAction Stop
                 $page = $response.Results | Select-Object -First 1
                 Write-Verbose "Created page with ID: $($page.id)"
                 return $page
@@ -123,10 +135,15 @@ function New-ConfluencePage {
             # have created it despite reporting an error)
             $existingPage = $null
             try {
-                $existingPage = Find-ConfluencePageByTitle -SpaceKey $SpaceKey -Title $Title -ParentId $ParentId -ErrorAction Stop
+                $existingPage = Find-ConfluencePageByTitle -SpaceId $resolvedSpaceId -Title $Title -ParentId $ParentId -ErrorAction Stop
             }
             catch {
-                Write-Verbose "Page lookup after the failed create did not succeed: $_"
+                $lookupError = $_
+                Write-Verbose "Page lookup after the failed create did not succeed: $lookupError"
+                if ($alreadyExists) {
+                    Write-Error "Confluence reports that page '$Title' already exists, but it could not be identified safely: $lookupError"
+                    return
+                }
             }
 
             if (-not $alreadyExists) {
@@ -139,7 +156,7 @@ function New-ConfluencePage {
             }
 
             if (-not $existingPage -or -not $existingPage.id) {
-                Write-Error "Confluence reports that page '$Title' already exists, but no page with exactly that title was found in space '$SpaceKey'. Error: $createError"
+                Write-Error "Confluence reports that page '$Title' already exists, but no page with exactly that title was found in space '$resolvedSpaceId'. Error: $createError"
                 return
             }
 

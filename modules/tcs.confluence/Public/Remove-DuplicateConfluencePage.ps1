@@ -4,14 +4,14 @@ function Remove-DuplicateConfluencePage {
         Removes duplicate Confluence pages that share a title and parent, keeping one.
 
     .DESCRIPTION
-        Remove-DuplicateConfluencePage lists the pages in a space, finds the pages with the given title
-        under the given parent and, when there is more than one, deletes all but one. By default the
-        newest page (highest version number, then latest modification) is kept; use
-        -KeepNewest:$false to keep the oldest.
+        Remove-DuplicateConfluencePage asks Confluence for every page in the space with exactly the
+        given title (all result pages are read), keeps those under the given parent and, when there is
+        more than one, deletes all but one. By default the newest page (latest creation date, createdAt)
+        is kept; use -KeepNewest:$false to keep the oldest. The version number is not used, because
+        an old page that was edited often has a higher version than a newer copy.
 
         Every deletion asks for confirmation unless you pass -Confirm:$false; -WhatIf shows what would
-        be deleted. The kept page is returned. Only the pages returned by Get-ConfluencePage for the
-        space (up to three API result pages) are considered.
+        be deleted. The kept page is returned.
 
         Called as Remove-DuplicateConfluencePages (the name used before 0.1.0) it still works through
         an alias.
@@ -26,7 +26,7 @@ function Remove-DuplicateConfluencePage {
         The exact title of the duplicated page.
 
     .PARAMETER KeepNewest
-        Keep the newest page (default). Use -KeepNewest:$false to keep the oldest page instead.
+        Keep the most recently created page (default). Use -KeepNewest:$false to keep the oldest page instead.
 
     .EXAMPLE
         Remove-DuplicateConfluencePage -SpaceKey DOCS -ParentId 1000 -PageTitle 'Weekly report' -WhatIf
@@ -70,30 +70,25 @@ function Remove-DuplicateConfluencePage {
     Invoke-TelemetryCollection @TelemetryArgs -Stage Start -ClearTimer
     $telemetryFailed = $false
     try {
-        $all = Get-ConfluencePage -SpaceKey $SpaceKey -ErrorAction Stop
-        $pagesCollection = @($all.Results | Where-Object { $null -ne $_ })
-        if ($pagesCollection.Count -eq 0) {
-            Write-Verbose "No pages returned for space '$SpaceKey'."
-            return
-        }
-
-        $duplicates = @($pagesCollection | Where-Object { $_.title -eq $PageTitle -and "$($_.parentId)" -eq $ParentId })
+        $query = @{ spaceKey = $SpaceKey; title = $PageTitle; limit = 250 }
+        $response = Invoke-ConfluenceRequest -Method GET -Resource pages -ApiVersion 2 -Query $query -All -ErrorAction Stop
+        $duplicates = @($response.Results | Where-Object { $null -ne $_ -and $_.title -eq $PageTitle -and "$($_.parentId)" -eq $ParentId })
         if ($duplicates.Count -le 1) {
             Write-Verbose 'Zero or one page found with that title/parent. Nothing to remove.'
             return ($duplicates | Select-Object -First 1)
         }
         Write-Verbose "Found $($duplicates.Count) pages matching criteria."
 
+        # Newest = latest creation date; page IDs (which increase) break ties
         $sortProperties = @(
-            @{ Expression = { $number = 0; if ($_.version -and [int]::TryParse("$($_.version.number)", [ref]$number)) { $number } else { 0 } } },
-            @{ Expression = { $date = [datetime]::MinValue; $stamp = if ($_.version -and $_.version.createdAt) { $_.version.createdAt } else { $_.lastModified }; if ($stamp -and [datetime]::TryParse("$stamp", [ref]$date)) { $date } else { [datetime]::MinValue } } }
+            @{ Expression = { ConvertTo-ConfluenceUtcDate -Value $_.createdAt } },
+            @{ Expression = { $number = [long]0; if ([long]::TryParse("$($_.id)", [ref]$number)) { $number } else { [long]0 } } }
         )
         $sortedPages = @($duplicates | Sort-Object -Property $sortProperties -Descending:$KeepNewest)
         $pageToKeep = $sortedPages[0]
         $pagesToDelete = @($sortedPages | Select-Object -Skip 1)
 
-        $versionNum = if ($pageToKeep.version) { $pageToKeep.version.number } else { 'N/A' }
-        Write-Verbose ('Keeping page ID={0} Version={1}' -f $pageToKeep.id, $versionNum)
+        Write-Verbose ('Keeping page ID={0} CreatedAt={1}' -f $pageToKeep.id, $pageToKeep.createdAt)
 
         foreach ($page in $pagesToDelete) {
             $deleteId = $page.id
@@ -101,7 +96,7 @@ function Remove-DuplicateConfluencePage {
                 continue
             }
             try {
-                $null = Invoke-ConfluenceRequest -Method DELETE -Resource pages -Id $deleteId -MaxQueryPages 1 -ErrorAction Stop
+                $null = Invoke-ConfluenceRequest -Method DELETE -Resource pages -ApiVersion 2 -Id $deleteId -MaxQueryPages 1 -ErrorAction Stop
                 Write-Verbose "Deleted page ID=$deleteId"
             }
             catch {

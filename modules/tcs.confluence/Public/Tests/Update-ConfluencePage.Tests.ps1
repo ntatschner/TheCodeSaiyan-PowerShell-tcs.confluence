@@ -33,11 +33,29 @@ Describe 'Update-ConfluencePage' {
         }
     }
 
-    It 'Includes the space id when given' {
+    It 'Includes the space id when given (-SpaceKey still works as an alias)' {
         $null = Update-ConfluencePage -PageId 1 -SpaceKey 42 -Title 't' -Content 'c' -Version 2
         Should -Invoke -ModuleName tcs.confluence Invoke-WebRequest -Times 1 -Exactly -ParameterFilter {
             ([System.Text.Encoding]::UTF8.GetString($Body) | ConvertFrom-Json).spaceId -eq '42'
         }
+    }
+
+    It 'Reads the current version and sends the next one when -Version is not given' {
+        Mock -ModuleName tcs.confluence Invoke-WebRequest -ParameterFilter { $Method -eq 'GET' } {
+            [pscustomobject]@{ StatusCode = 200; StatusDescription = 'OK'; Content = '{"id":"12345","title":"Old","version":{"number":7}}' }
+        }
+        $null = Update-ConfluencePage -PageId 12345 -Title 'Updated' -Content '<p>New</p>'
+        Should -Invoke -ModuleName tcs.confluence Invoke-WebRequest -Times 1 -Exactly -ParameterFilter {
+            $Method -eq 'GET' -and $Uri.OriginalString -eq 'https://contoso.atlassian.net/wiki/api/v2/pages/12345'
+        }
+        Should -Invoke -ModuleName tcs.confluence Invoke-WebRequest -Times 1 -Exactly -ParameterFilter {
+            $Method -eq 'PUT' -and ([System.Text.Encoding]::UTF8.GetString($Body) | ConvertFrom-Json).version.number -eq 8
+        }
+    }
+
+    It 'Sends nothing with -WhatIf, even without -Version' {
+        Update-ConfluencePage -PageId 1 -Title 't' -Content 'c' -WhatIf | Should -BeNullOrEmpty
+        Should -Invoke -ModuleName tcs.confluence Invoke-WebRequest -Times 0 -Exactly
     }
 
     It 'Sends nothing with -WhatIf' {
