@@ -1,67 +1,102 @@
-#Requires -Modules Pester
-
 BeforeAll {
-    . "$PSScriptRoot\..\New-ConfluencePage.ps1"
-    . "$PSScriptRoot\..\Update-ConfluencePage.ps1" # Dependency
+    $env:TCS_CONFIG_ROOT = Join-Path -Path $TestDrive -ChildPath 'config'
+    $env:TCS_SKIP_UPDATE_CHECK = '1'
+    $env:TCS_TELEMETRY_OPTOUT = '1'
+    $ModuleRoot = Split-Path -Path (Split-Path -Path $PSScriptRoot -Parent) -Parent
+    Import-Module -Name (Join-Path -Path $ModuleRoot -ChildPath 'tcs.confluence.psd1') -Force
 }
 
+AfterAll {
+    Remove-Module -Name tcs.confluence -Force -ErrorAction SilentlyContinue
+}
+
+
 Describe 'New-ConfluencePage' {
-    # Mock the global context
-    InModuleScope -ModuleName 'tcs.confluence' {
-        $script:ConfluenceContext = @{
-            ConnectionURI = 'https://mock.atlassian.net/wiki/api/v2'
-            AuthorizationHeader = @{ Authorization = 'Basic mock' }
-        }
+    BeforeAll {
+        Set-ConfluenceContext -ConfluenceUrl 'https://contoso.atlassian.net' -Username 'user@contoso.com' -PersonalAccessToken 'token'
+        $pageParams = @{ SpaceKey = '42'; ParentId = '100'; Title = 'Release notes'; Status = 'current'; Content = '<p>Hello</p>' }
+        $conflict = [pscustomobject]@{ StatusCode = 400; StatusDescription = 'Bad Request'; Content = '{"errors":[{"title":"A page with this title already exists: A page already exists with the same TITLE in this space"}]}' }
     }
 
-    Context 'When creating a new page successfully' {
-        Mock -CommandName Invoke-WebRequest -MockWith {
-            return @{
-                StatusCode = 200
-                Content = '{"id": "12345", "title": "New Page"}'
-            } | ConvertTo-Json | ConvertFrom-Json -AsHashtable
-        } -Verifiable
-
-        It 'should call Invoke-WebRequest with POST and return the new page object' {
-            $result = New-ConfluencePage -SpaceKey 'TEST' -ParentId '100' -Title 'New Page' -Status 'current' -Content '<p>Hello</p>'
-            $result.id | Should -Be '12345'
-            Assert-MockCalled -CommandName Invoke-WebRequest -Scope It -ParameterFilter { $Method -eq 'Post' } -Exactly 1
-        }
-    }
-
-    Context 'When page already exists and -Force is used' {
-        # Simulate initial failure, then successful find and update
-        $createFailedResponse = @{
-            StatusCode = 400 # Or other error code
-            Content = '{"Errors": {"title": "A page with this title already exists"}}'
-        } | ConvertTo-Json | ConvertFrom-Json -AsHashtable
-
-        Mock -CommandName Invoke-WebRequest -MockWith {
-            param($Method)
-            if ($Method -eq 'Post') { return $script:createFailedResponse }
-            # This would be the PUT from Update-ConfluencePage
-            if ($Method -eq 'Put') { return @{ StatusCode = 200; Content = '{"id": "existing-54321"}' } | ConvertTo-Json | ConvertFrom-Json -AsHashtable }
-        } -Verifiable
-
-        Mock -CommandName Get-ConfluencePage -MockWith {
-            param($Search)
-            if ($Search -eq 'Existing Page') {
-                return @{ results = @( @{ id = 'existing-54321'; title = 'Existing Page'; version = @{ number = 1 } } ) }
+    Context 'Successful create' {
+        BeforeEach {
+            Mock -ModuleName tcs.confluence Invoke-WebRequest {
+                [pscustomobject]@{ StatusCode = 200; StatusDescription = 'OK'; Content = '{"id":"12345","title":"Release notes"}' }
             }
-        } -Verifiable
+        }
 
-        Mock -CommandName Update-ConfluencePage -MockWith {
-            param($PageId)
-            return @{ id = $PageId; title = 'Existing Page' }
-        } -Verifiable
+        It 'POSTs the page and returns it' {
+            $result = New-ConfluencePage @pageParams
+            $result.id | Should -Be '12345'
+            Should -Invoke -ModuleName tcs.confluence Invoke-WebRequest -Times 1 -Exactly -ParameterFilter {
+                $body = if ($Body) { [System.Text.Encoding]::UTF8.GetString($Body) | ConvertFrom-Json }
+                $Method -eq 'POST' -and $Uri.OriginalString -eq 'https://contoso.atlassian.net/wiki/api/v2/pages' -and
+                $body.spaceId -eq '42' -and $body.parentId -eq '100' -and $body.title -eq 'Release notes' -and
+                $body.body.representation -eq 'storage' -and $body.body.value -eq '<p>Hello</p>'
+            }
+        }
 
-        It 'should attempt to create, fail, find the existing page, and update it' {
-            $result = New-ConfluencePage -SpaceKey 'TEST' -ParentId '100' -Title 'Existing Page' -Status 'current' -Content '<p>Updated</p>' -Force
-            
-            $result.id | Should -Be 'existing-54321'
-            Assert-MockCalled -CommandName Invoke-WebRequest -Scope It -ParameterFilter { $Method -eq 'Post' } -Exactly 1
-            Assert-MockCalled -CommandName Get-ConfluencePage -Scope It -Exactly 1
-            Assert-MockCalled -CommandName Update-ConfluencePage -Scope It -Exactly 1
+        It 'Sends nothing with -WhatIf' {
+            New-ConfluencePage @pageParams -WhatIf | Should -BeNullOrEmpty
+            Should -Invoke -ModuleName tcs.confluence Invoke-WebRequest -Times 0 -Exactly
+        }
+    }
+
+    Context 'Title conflict' {
+        BeforeEach {
+            Mock -ModuleName tcs.confluence Invoke-WebRequest -ParameterFilter { $Method -eq 'POST' } { $conflict }
+            Mock -ModuleName tcs.confluence Invoke-WebRequest -ParameterFilter { $Method -eq 'GET' } {
+                [pscustomobject]@{ StatusCode = 200; StatusDescription = 'OK'; Content = '{"results":[{"id":"7","title":"Release notes","parentId":"999","version":{"number":1}},{"id":"8","title":"Release notes","parentId":"100","version":{"number":4}}]}' }
+            }
+            Mock -ModuleName tcs.confluence Invoke-WebRequest -ParameterFilter { $Method -eq 'PUT' } {
+                [pscustomobject]@{ StatusCode = 200; StatusDescription = 'OK'; Content = '{"id":"8","title":"Release notes","version":{"number":5}}' }
+            }
+        }
+
+        It 'Reports the conflict without -Force and changes nothing' {
+            { New-ConfluencePage @pageParams -ErrorAction Stop } | Should -Throw -ExpectedMessage '*already exists*-Force*'
+            Should -Invoke -ModuleName tcs.confluence Invoke-WebRequest -Times 0 -Exactly -ParameterFilter { $Method -eq 'PUT' }
+        }
+
+        It 'Updates the page with the same title under the same parent with -Force' {
+            $result = New-ConfluencePage @pageParams -Force
+            $result.id | Should -Be '8'
+            Should -Invoke -ModuleName tcs.confluence Invoke-WebRequest -Times 1 -Exactly -ParameterFilter {
+                $body = if ($Body) { [System.Text.Encoding]::UTF8.GetString($Body) | ConvertFrom-Json }
+                $Method -eq 'PUT' -and $Uri.OriginalString -like '*/wiki/api/v2/pages/8' -and $body.version.number -eq 5 -and $body.body.value -eq '<p>Hello</p>'
+            }
+        }
+
+        It 'Never overwrites a page with a different title' {
+            Mock -ModuleName tcs.confluence Invoke-WebRequest -ParameterFilter { $Method -eq 'GET' } {
+                [pscustomobject]@{ StatusCode = 200; StatusDescription = 'OK'; Content = '{"results":[{"id":"9","title":"Release notes (old)","parentId":"100","version":{"number":1}}]}' }
+            }
+            { New-ConfluencePage @pageParams -Force -ErrorAction Stop } | Should -Throw -ExpectedMessage '*no page with exactly that title*'
+            Should -Invoke -ModuleName tcs.confluence Invoke-WebRequest -Times 0 -Exactly -ParameterFilter { $Method -eq 'PUT' }
+        }
+    }
+
+    Context 'Other errors' {
+        It 'Returns the page with a warning when Confluence created it despite an error' {
+            Mock -ModuleName tcs.confluence Invoke-WebRequest -ParameterFilter { $Method -eq 'POST' } {
+                [pscustomobject]@{ StatusCode = 500; StatusDescription = 'Internal Server Error'; Content = '' }
+            }
+            Mock -ModuleName tcs.confluence Invoke-WebRequest -ParameterFilter { $Method -eq 'GET' } {
+                [pscustomobject]@{ StatusCode = 200; StatusDescription = 'OK'; Content = '{"results":[{"id":"8","title":"Release notes","parentId":"100"}]}' }
+            }
+            $result = New-ConfluencePage @pageParams -WarningAction SilentlyContinue -WarningVariable pageWarning
+            $result.id | Should -Be '8'
+            $pageWarning | Should -Not -BeNullOrEmpty
+        }
+
+        It 'Reports the error when no page exists' {
+            Mock -ModuleName tcs.confluence Invoke-WebRequest -ParameterFilter { $Method -eq 'POST' } {
+                [pscustomobject]@{ StatusCode = 500; StatusDescription = 'Internal Server Error'; Content = '' }
+            }
+            Mock -ModuleName tcs.confluence Invoke-WebRequest -ParameterFilter { $Method -eq 'GET' } {
+                [pscustomobject]@{ StatusCode = 200; StatusDescription = 'OK'; Content = '{"results":[]}' }
+            }
+            { New-ConfluencePage @pageParams -ErrorAction Stop } | Should -Throw -ExpectedMessage '*500*'
         }
     }
 }
