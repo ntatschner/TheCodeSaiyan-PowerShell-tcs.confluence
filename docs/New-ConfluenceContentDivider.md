@@ -17,8 +17,8 @@ New-ConfluenceContentDivider [[-Type] <String>] [-ProgressAction <ActionPreferen
 ```
 
 ## DESCRIPTION
-New-ConfluenceContentDivider returns an \<hr\> element, optionally with a style class, or an empty
-paragraph for vertical space.
+New-ConfluenceContentDivider returns a self-closed \<hr/\> element (storage format is XHTML),
+optionally with a style class, or an empty paragraph for vertical space.
 
 ## EXAMPLES
 
@@ -27,7 +27,7 @@ paragraph for vertical space.
 New-ConfluenceContentDivider -Type space
 ```
 
-Returns \<p\>&nbsp;\</p\>.
+Returns \<p\>&#160;\</p\> (a non-breaking space).
 
 ## PARAMETERS
 
@@ -35,17 +35,14 @@ Returns \<p\>&nbsp;\</p\>.
 The divider type: line (default), space, default, dashed, dotted, double or gradient.
 
 ```yaml
-Type:String
-Parameter Sets:   (All)
+Type: String
+Parameter Sets: (All)
 Aliases:
+
 Required: False
-Position: 1Default
-Default value: None
+Position: 1
 Default value: Line
 Accept pipeline input: False
-input:False
-Accept pipeline input: False
-Accept wildcard characters: False
 Accept wildcard characters: False
 ```
 
@@ -53,18 +50,14 @@ Accept wildcard characters: False
 {{ Fill ProgressAction Description }}
 
 ```yaml
-Type:ActionPreference
-Parameter Sets:   (All)
-Aliases:proga
+Type: ActionPreference
+Parameter Sets: (All)
+Aliases: proga
+
 Required: False
-Position:Named
-Default value: None
-Default value: None
+Position: Named
 Default value: None
 Accept pipeline input: False
-input:False
-Accept pipeline input: False
-Accept wildcard characters: False
 Accept wildcard characters: False
 ```
 

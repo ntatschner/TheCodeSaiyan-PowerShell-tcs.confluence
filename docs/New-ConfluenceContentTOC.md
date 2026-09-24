@@ -36,18 +36,14 @@ Returns a numbered table of contents of the h2 and h3 headings.
 Show the table of contents as a horizontal (flat) list instead of a vertical list.
 
 ```yaml
-Type:Switch
-Parameter Sets:   (All)
+Type: SwitchParameter
+Parameter Sets: (All)
 Aliases:
+
 Required: False
-Position:Named
-Default value: None
-Default value: None
+Position: Named
 Default value: False
 Accept pipeline input: False
-input:False
-Accept pipeline input: False
-Accept wildcard characters: False
 Accept wildcard characters: False
 ```
 
@@ -56,17 +52,14 @@ The list style: None (default), Mixed (Confluence default bullets), Bullet (disc
 Square or Number (decimal).
 
 ```yaml
-Type:String
-Parameter Sets:   (All)
+Type: String
+Parameter Sets: (All)
 Aliases:
+
 Required: False
-Position: 1Default
-Default value: None
+Position: 1
 Default value: None
 Accept pipeline input: False
-input:False
-Accept pipeline input: False
-Accept wildcard characters: False
 Accept wildcard characters: False
 ```
 
@@ -75,18 +68,14 @@ The lowest heading level to include, 1 to 6.
 Default 1.
 
 ```yaml
-Type:
-Int32
-Parameter Sets:   (All)
+Type: Int32
+Parameter Sets: (All)
 Aliases:
+
 Required: False
-Position: 2Default
-Default value: None
+Position: 2
 Default value: 1
 Accept pipeline input: False
-input:False
-Accept pipeline input: False
-Accept wildcard characters: False
 Accept wildcard characters: False
 ```
 
@@ -95,18 +84,14 @@ The highest heading level to include, 1 to 6.
 Default 6.
 
 ```yaml
-Type:
-Int32
-Parameter Sets:   (All)
+Type: Int32
+Parameter Sets: (All)
 Aliases:
+
 Required: False
-Position: 3Default
-Default value: None
+Position: 3
 Default value: 6
 Accept pipeline input: False
-input:False
-Accept pipeline input: False
-Accept wildcard characters: False
 Accept wildcard characters: False
 ```
 
@@ -114,18 +99,14 @@ Accept wildcard characters: False
 Number the entries as an outline (1, 1.1, 1.2 ...).
 
 ```yaml
-Type:Switch
-Parameter Sets:   (All)
+Type: SwitchParameter
+Parameter Sets: (All)
 Aliases:
+
 Required: False
-Position:Named
-Default value: None
-Default value: None
+Position: Named
 Default value: False
 Accept pipeline input: False
-input:False
-Accept pipeline input: False
-Accept wildcard characters: False
 Accept wildcard characters: False
 ```
 
@@ -133,18 +114,14 @@ Accept wildcard characters: False
 {{ Fill ProgressAction Description }}
 
 ```yaml
-Type:ActionPreference
-Parameter Sets:   (All)
-Aliases:proga
+Type: ActionPreference
+Parameter Sets: (All)
+Aliases: proga
+
 Required: False
-Position:Named
-Default value: None
-Default value: None
+Position: Named
 Default value: None
 Accept pipeline input: False
-input:False
-Accept pipeline input: False
-Accept wildcard characters: False
 Accept wildcard characters: False
 ```
 

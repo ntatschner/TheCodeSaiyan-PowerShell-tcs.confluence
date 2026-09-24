@@ -5,37 +5,39 @@ online version:
 schema: 2.0.0
 ---
 
-# New-ConfluenceContentCodeBlock
+# New-ConfluenceContentStatus
 
 ## SYNOPSIS
-Creates a Confluence code block macro.
+Creates a Confluence status lozenge (status macro).
 
 ## SYNTAX
 
 ```
-New-ConfluenceContentCodeBlock [-Content] <String> [[-Language] <String>] [[-Theme] <String>] [-LineNumbers]
- [[-Collapse] <Boolean>] [-ProgressAction <ActionPreference>] [<CommonParameters>]
+New-ConfluenceContentStatus [-Text] <String> [[-Colour] <String>] [-Subtle]
+ [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
-New-ConfluenceContentCodeBlock returns the storage-format markup for the Confluence "code"
-macro.
-The code is placed in a CDATA section, so it is shown exactly as given; a "\]\]\>"
-sequence in the code is split so it cannot end the CDATA section early.
+New-ConfluenceContentStatus returns the storage-format markup for the Confluence "status"
+macro: a small coloured label such as DONE or IN PROGRESS.
+The text is escaped.
+Use the result
+in a paragraph or, with New-ConfluenceContentTable -Raw, in a table cell.
 
 ## EXAMPLES
 
 ### EXAMPLE 1
 ```
-New-ConfluenceContentCodeBlock -Content 'Get-Process' -Language powershell -LineNumbers
+New-ConfluenceContentStatus -Text 'Done' -Colour Green
 ```
 
-Returns a PowerShell code block macro with line numbers.
+Returns \<ac:structured-macro ac:name="status"\>\<ac:parameter ac:name="colour"\>Green\</ac:parameter\>\<ac:parameter ac:name="title"\>Done\</ac:parameter\>\</ac:structured-macro\>.
 
 ## PARAMETERS
 
-### -Content
-The code to show.
+### -Text
+The text of the lozenge.
+Confluence shows it in capitals.
 
 ```yaml
 Type: String
@@ -49,39 +51,24 @@ Accept pipeline input: False
 Accept wildcard characters: False
 ```
 
-### -Language
-The language used for syntax highlighting, for example powershell, bash or json.
-Default none.
+### -Colour
+The colour: Grey (default), Red, Yellow, Green, Blue or Purple.
+-Color is an alias.
 
 ```yaml
 Type: String
 Parameter Sets: (All)
-Aliases:
+Aliases: Color
 
 Required: False
 Position: 2
-Default value: None
+Default value: Grey
 Accept pipeline input: False
 Accept wildcard characters: False
 ```
 
-### -Theme
-The macro theme: Default, Midnight, Eclipse or Emacs.
-
-```yaml
-Type: String
-Parameter Sets: (All)
-Aliases:
-
-Required: False
-Position: 3
-Default value: Default
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
-### -LineNumbers
-Show line numbers.
+### -Subtle
+Use the subtle (outlined) style instead of a filled lozenge.
 
 ```yaml
 Type: SwitchParameter
@@ -90,21 +77,6 @@ Aliases:
 
 Required: False
 Position: Named
-Default value: False
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
-### -Collapse
-Collapse the code block when the page loads.
-
-```yaml
-Type: Boolean
-Parameter Sets: (All)
-Aliases:
-
-Required: False
-Position: 4
 Default value: False
 Accept pipeline input: False
 Accept wildcard characters: False

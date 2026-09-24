@@ -5,53 +5,53 @@ online version:
 schema: 2.0.0
 ---
 
-# Join-ConfluenceContent
+# Get-ConfluenceAttachment
 
 ## SYNOPSIS
-Joins blocks of Confluence content with a separator.
+Gets the attachments of a Confluence page.
 
 ## SYNTAX
 
 ```
-Join-ConfluenceContent [-ContentBlocks] <String[]> [[-Separator] <String>] [-ProgressAction <ActionPreference>]
+Get-ConfluenceAttachment [-PageId] <String> [[-FileName] <String>] [-ProgressAction <ActionPreference>]
  [<CommonParameters>]
 ```
 
 ## DESCRIPTION
-Join-ConfluenceContent concatenates storage-format content blocks, such as the output of the
-New-ConfluenceContent* functions, with a horizontal rule, line break, space or tab between them.
+Get-ConfluenceAttachment returns the attachments of a page through the Confluence v2 API
+(GET /wiki/api/v2/pages/\<id\>/attachments), reading every result page.
+Each attachment has
+id, title, mediaType, fileSize, version and downloadLink properties.
 
 ## EXAMPLES
 
 ### EXAMPLE 1
 ```
-Text</p>' -Separator HorizontalRule
+Get-ConfluenceAttachment -PageId 123456 | Select-Object title, fileSize
 ```
 
-Returns \<h1\>Intro\</h1\>\<hr /\>\<p\>Text\</p\>.
+Lists the files attached to page 123456.
 
 ## PARAMETERS
 
-### -ContentBlocks
-The content blocks to join, in order.
+### -PageId
+The ID of the page.
+Accepts pipeline input by property name (id).
 
 ```yaml
-Type: String[]
+Type: String
 Parameter Sets: (All)
-Aliases:
+Aliases: id
 
 Required: True
 Position: 1
 Default value: None
-Accept pipeline input: False
+Accept pipeline input: True (ByPropertyName)
 Accept wildcard characters: False
 ```
 
-### -Separator
-The separator between blocks: NewLine (\<br /\>, default), HorizontalRule (\<hr /\>),
-Space (&#160;, a non-breaking space) or Tab (&#8195;, an em space).
-Numeric character
-references are used so the result is well-formed XML.
+### -FileName
+Only return the attachment with this file name.
 
 ```yaml
 Type: String
@@ -60,7 +60,7 @@ Aliases:
 
 Required: False
 Position: 2
-Default value: NewLine
+Default value: None
 Accept pipeline input: False
 Accept wildcard characters: False
 ```
@@ -87,7 +87,7 @@ This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable
 
 ## OUTPUTS
 
-### System.String
+### System.Management.Automation.PSCustomObject. One object per attachment.
 ## NOTES
 
 ## RELATED LINKS

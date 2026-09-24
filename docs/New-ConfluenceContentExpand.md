@@ -5,37 +5,54 @@ online version:
 schema: 2.0.0
 ---
 
-# New-ConfluenceContentCodeBlock
+# New-ConfluenceContentExpand
 
 ## SYNOPSIS
-Creates a Confluence code block macro.
+Creates a Confluence expand macro (a collapsible section).
 
 ## SYNTAX
 
 ```
-New-ConfluenceContentCodeBlock [-Content] <String> [[-Language] <String>] [[-Theme] <String>] [-LineNumbers]
- [[-Collapse] <Boolean>] [-ProgressAction <ActionPreference>] [<CommonParameters>]
+New-ConfluenceContentExpand [[-Title] <String>] [-Content] <String> [-Raw] [-ProgressAction <ActionPreference>]
+ [<CommonParameters>]
 ```
 
 ## DESCRIPTION
-New-ConfluenceContentCodeBlock returns the storage-format markup for the Confluence "code"
-macro.
-The code is placed in a CDATA section, so it is shown exactly as given; a "\]\]\>"
-sequence in the code is split so it cannot end the CDATA section early.
+New-ConfluenceContentExpand returns the storage-format markup for the Confluence "expand"
+macro: a section that is collapsed until the reader clicks its title.
+The title is escaped.
+The content is escaped and wrapped in a paragraph; use -Raw to insert storage-format markup,
+for example a table or code block built with the other New-ConfluenceContent* functions.
 
 ## EXAMPLES
 
 ### EXAMPLE 1
 ```
-New-ConfluenceContentCodeBlock -Content 'Get-Process' -Language powershell -LineNumbers
+New-ConfluenceContentExpand -Title 'Details' -Content (New-ConfluenceContentTable -TableData $rows) -Raw
 ```
 
-Returns a PowerShell code block macro with line numbers.
+Returns a collapsed "Details" section that contains a table.
 
 ## PARAMETERS
 
+### -Title
+The text of the clickable title.
+Confluence shows "Click here to expand..." when it is empty.
+
+```yaml
+Type: String
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: 1
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
 ### -Content
-The code to show.
+The body of the section: plain text, or storage-format markup with -Raw.
 
 ```yaml
 Type: String
@@ -43,45 +60,14 @@ Parameter Sets: (All)
 Aliases:
 
 Required: True
-Position: 1
-Default value: None
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
-### -Language
-The language used for syntax highlighting, for example powershell, bash or json.
-Default none.
-
-```yaml
-Type: String
-Parameter Sets: (All)
-Aliases:
-
-Required: False
 Position: 2
 Default value: None
 Accept pipeline input: False
 Accept wildcard characters: False
 ```
 
-### -Theme
-The macro theme: Default, Midnight, Eclipse or Emacs.
-
-```yaml
-Type: String
-Parameter Sets: (All)
-Aliases:
-
-Required: False
-Position: 3
-Default value: Default
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
-### -LineNumbers
-Show line numbers.
+### -Raw
+Insert -Content as storage-format markup without escaping or wrapping it in a paragraph.
 
 ```yaml
 Type: SwitchParameter
@@ -90,21 +76,6 @@ Aliases:
 
 Required: False
 Position: Named
-Default value: False
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
-### -Collapse
-Collapse the code block when the page loads.
-
-```yaml
-Type: Boolean
-Parameter Sets: (All)
-Aliases:
-
-Required: False
-Position: 4
 Default value: False
 Accept pipeline input: False
 Accept wildcard characters: False

@@ -54,18 +54,14 @@ The numeric ID of the space to retrieve.
 Returns the object from Invoke-ConfluenceRequest.
 
 ```yaml
-Type:String
+Type: String
 Parameter Sets: SpaceId
 Aliases:
+
 Required: True
-Position:Named
-Default value: None
-Default value: None
+Position: Named
 Default value: None
 Accept pipeline input: False
-input:False
-Accept pipeline input: False
-Accept wildcard characters: False
 Accept wildcard characters: False
 ```
 
@@ -74,18 +70,14 @@ A space name filter, for example 'Team*'.
 Matching is case-insensitive.
 
 ```yaml
-Type:String
+Type: String
 Parameter Sets: AllSpaces
 Aliases:
+
 Required: False
-Position:Named
-Default value: None
-Default value: None
+Position: Named
 Default value: None
 Accept pipeline input: False
-input:False
-Accept pipeline input: False
-Accept wildcard characters: False
 Accept wildcard characters: False
 ```
 
@@ -94,19 +86,14 @@ The number of spaces requested per API call.
 Default 50.
 
 ```yaml
-Type:
-Int32
+Type: Int32
 Parameter Sets: AllSpaces
 Aliases:
+
 Required: False
-Position:Named
-Default value: None
-Default value: None
+Position: Named
 Default value: 50
 Accept pipeline input: False
-input:False
-Accept pipeline input: False
-Accept wildcard characters: False
 Accept wildcard characters: False
 ```
 
@@ -115,19 +102,14 @@ The maximum number of API result pages to retrieve.
 Default 3.
 
 ```yaml
-Type:
-Int16
+Type: Int16
 Parameter Sets: AllSpaces
 Aliases:
+
 Required: False
-Position:Named
-Default value: None
-Default value: None
+Position: Named
 Default value: 3
 Accept pipeline input: False
-input:False
-Accept pipeline input: False
-Accept wildcard characters: False
 Accept wildcard characters: False
 ```
 
@@ -135,18 +117,14 @@ Accept wildcard characters: False
 {{ Fill ProgressAction Description }}
 
 ```yaml
-Type:ActionPreference
-Parameter Sets:   (All)
-Aliases:proga
+Type: ActionPreference
+Parameter Sets: (All)
+Aliases: proga
+
 Required: False
-Position:Named
-Default value: None
-Default value: None
+Position: Named
 Default value: None
 Accept pipeline input: False
-input:False
-Accept pipeline input: False
-Accept wildcard characters: False
 Accept wildcard characters: False
 ```
 

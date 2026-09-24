@@ -35,7 +35,9 @@ It is never written to disk, never returned by Get-ConfluenceContext and never w
 verbose, warning or error streams.
 The Authorization header is built for each request.
 
-Use Get-ConfluenceContext to see the current connection details.
+Use Get-ConfluenceContext to see the current connection details and Clear-ConfluenceContext to
+forget them.
+Setting a context also clears the cached space key to space ID lookups.
 
 ## EXAMPLES
 
@@ -62,18 +64,14 @@ Only https URLs
 are accepted so the credential is never sent in clear text.
 
 ```yaml
-Type:String
-Parameter Sets:   (All)
+Type: String
+Parameter Sets: (All)
 Aliases:
+
 Required: True
-Position:Named
-Default value: None
-Default value: None
+Position: Named
 Default value: None
 Accept pipeline input: False
-input:False
-Accept pipeline input: False
-Accept wildcard characters: False
 Accept wildcard characters: False
 ```
 
@@ -81,18 +79,14 @@ Accept wildcard characters: False
 The account e-mail address (Confluence Cloud) or user name used with the API token.
 
 ```yaml
-Type:String
+Type: String
 Parameter Sets: Token
-Aliases:EmailAddress
+Aliases: EmailAddress
+
 Required: True
-Position:Named
-Default value: None
-Default value: None
+Position: Named
 Default value: None
 Accept pipeline input: False
-input:False
-Accept pipeline input: False
-Accept wildcard characters: False
 Accept wildcard characters: False
 ```
 
@@ -102,18 +96,14 @@ Kept for backward compatibility; prefer
 -Credential so the token is not visible in your command history.
 
 ```yaml
-Type:String
+Type: String
 Parameter Sets: Token
-Aliases:PAT
+Aliases: PAT
+
 Required: True
-Position:Named
-Default value: None
-Default value: None
+Position: Named
 Default value: None
 Accept pipeline input: False
-input:False
-Accept pipeline input: False
-Accept wildcard characters: False
 Accept wildcard characters: False
 ```
 
@@ -122,37 +112,33 @@ A PSCredential whose user name is the account e-mail address and whose password 
 token, for example from Get-Credential or a secret store.
 
 ```yaml
-Type:PSCredential
+Type: PSCredential
 Parameter Sets: Credential
 Aliases:
+
 Required: True
-Position:Named
-Default value: None
-Default value: None
+Position: Named
 Default value: None
 Accept pipeline input: False
-input:False
-Accept pipeline input: False
-Accept wildcard characters: False
 Accept wildcard characters: False
 ```
 
 ### -ApiVersion
-The default REST API version for the derived ConnectionURI: v2 (default) or v1.
+The default REST API version: v2 (default) or v1.
+It sets the derived ConnectionURI and the
+version Invoke-ConfluenceRequest -Resource uses when the call does not pass -ApiVersion.
+The
+page, space, label and attachment commands always use the API version they are written for.
 
 ```yaml
-Type:String
-Parameter Sets:   (All)
+Type: String
+Parameter Sets: (All)
 Aliases:
+
 Required: False
-Position:Named
-Default value: None
-Default value: None
+Position: Named
 Default value: V2
 Accept pipeline input: False
-input:False
-Accept pipeline input: False
-Accept wildcard characters: False
 Accept wildcard characters: False
 ```
 
@@ -161,18 +147,14 @@ Shows what would happen if the cmdlet runs.
 The cmdlet is not run.
 
 ```yaml
-Type:Switch
-Parameter Sets:   (All)
-Aliases:wi
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases: wi
+
 Required: False
-Position:Named
-Default value: None
-Default value: None
+Position: Named
 Default value: None
 Accept pipeline input: False
-input:False
-Accept pipeline input: False
-Accept wildcard characters: False
 Accept wildcard characters: False
 ```
 
@@ -180,18 +162,14 @@ Accept wildcard characters: False
 Prompts you for confirmation before running the cmdlet.
 
 ```yaml
-Type:Switch
-Parameter Sets:   (All)
-Aliases:cf
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases: cf
+
 Required: False
-Position:Named
-Default value: None
-Default value: None
+Position: Named
 Default value: None
 Accept pipeline input: False
-input:False
-Accept pipeline input: False
-Accept wildcard characters: False
 Accept wildcard characters: False
 ```
 
@@ -199,18 +177,14 @@ Accept wildcard characters: False
 {{ Fill ProgressAction Description }}
 
 ```yaml
-Type:ActionPreference
-Parameter Sets:   (All)
-Aliases:proga
+Type: ActionPreference
+Parameter Sets: (All)
+Aliases: proga
+
 Required: False
-Position:Named
-Default value: None
-Default value: None
+Position: Named
 Default value: None
 Accept pipeline input: False
-input:False
-Accept pipeline input: False
-Accept wildcard characters: False
 Accept wildcard characters: False
 ```
 

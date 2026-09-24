@@ -5,37 +5,52 @@ online version:
 schema: 2.0.0
 ---
 
-# New-ConfluenceContentCodeBlock
+# Search-ConfluenceContent
 
 ## SYNOPSIS
-Creates a Confluence code block macro.
+Searches Confluence with a CQL query.
 
 ## SYNTAX
 
 ```
-New-ConfluenceContentCodeBlock [-Content] <String> [[-Language] <String>] [[-Theme] <String>] [-LineNumbers]
- [[-Collapse] <Boolean>] [-ProgressAction <ActionPreference>] [<CommonParameters>]
+Search-ConfluenceContent [-Cql] <String> [-Limit <Int32>] [-MaxQueryPages <Int16>] [-All] [-Expand <String[]>]
+ [-ProgressAction <ActionPreference>] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
-New-ConfluenceContentCodeBlock returns the storage-format markup for the Confluence "code"
-macro.
-The code is placed in a CDATA section, so it is shown exactly as given; a "\]\]\>"
-sequence in the code is split so it cannot end the CDATA section early.
+Search-ConfluenceContent runs a Confluence Query Language (CQL) search through the v1 search
+API (GET /wiki/rest/api/search?cql=...) and writes each search result to the pipeline.
+A
+result has content (the page, blog post or attachment), title, excerpt, url and
+lastModified properties.
+
+Up to -MaxQueryPages result pages are read; a warning is written when more results are
+available.
+Use -All to read every result page.
+
+The query is sent as given: quote values with double quotes and escape a backslash or double
+quote inside a value with a backslash.
 
 ## EXAMPLES
 
 ### EXAMPLE 1
 ```
-New-ConfluenceContentCodeBlock -Content 'Get-Process' -Language powershell -LineNumbers
+now("-7d")' -All
 ```
 
-Returns a PowerShell code block macro with line numbers.
+Returns every page in the DOCS space changed in the last seven days.
+
+### EXAMPLE 2
+```
+Search-ConfluenceContent -Cql 'label = runbook' | Select-Object title, url
+```
+
+Lists the content labelled runbook.
 
 ## PARAMETERS
 
-### -Content
-The code to show.
+### -Cql
+The CQL query, for example: type = page AND space = DOCS AND text ~ "backup".
 
 ```yaml
 Type: String
@@ -49,39 +64,40 @@ Accept pipeline input: False
 Accept wildcard characters: False
 ```
 
-### -Language
-The language used for syntax highlighting, for example powershell, bash or json.
-Default none.
+### -Limit
+The number of results requested per API call.
+Default 25.
 
 ```yaml
-Type: String
+Type: Int32
 Parameter Sets: (All)
 Aliases:
 
 Required: False
-Position: 2
-Default value: None
+Position: Named
+Default value: 25
 Accept pipeline input: False
 Accept wildcard characters: False
 ```
 
-### -Theme
-The macro theme: Default, Midnight, Eclipse or Emacs.
+### -MaxQueryPages
+The maximum number of API result pages to retrieve.
+Default 3.
 
 ```yaml
-Type: String
+Type: Int16
 Parameter Sets: (All)
 Aliases:
 
 Required: False
-Position: 3
-Default value: Default
+Position: Named
+Default value: 3
 Accept pipeline input: False
 Accept wildcard characters: False
 ```
 
-### -LineNumbers
-Show line numbers.
+### -All
+Retrieve every API result page (ignores -MaxQueryPages).
 
 ```yaml
 Type: SwitchParameter
@@ -95,17 +111,17 @@ Accept pipeline input: False
 Accept wildcard characters: False
 ```
 
-### -Collapse
-Collapse the code block when the page loads.
+### -Expand
+Properties to expand in the results, for example content.space or content.version.
 
 ```yaml
-Type: Boolean
+Type: String[]
 Parameter Sets: (All)
 Aliases:
 
 Required: False
-Position: 4
-Default value: False
+Position: Named
+Default value: None
 Accept pipeline input: False
 Accept wildcard characters: False
 ```
@@ -132,7 +148,7 @@ This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable
 
 ## OUTPUTS
 
-### System.String
+### System.Management.Automation.PSCustomObject. One object per search result.
 ## NOTES
 
 ## RELATED LINKS

@@ -5,107 +5,98 @@ online version:
 schema: 2.0.0
 ---
 
-# New-ConfluenceContentCodeBlock
+# Add-ConfluencePageLabel
 
 ## SYNOPSIS
-Creates a Confluence code block macro.
+Adds labels to a Confluence page.
 
 ## SYNTAX
 
 ```
-New-ConfluenceContentCodeBlock [-Content] <String> [[-Language] <String>] [[-Theme] <String>] [-LineNumbers]
- [[-Collapse] <Boolean>] [-ProgressAction <ActionPreference>] [<CommonParameters>]
+Add-ConfluencePageLabel [-PageId] <String> [-Label] <String[]> [-ProgressAction <ActionPreference>] [-WhatIf]
+ [-Confirm] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
-New-ConfluenceContentCodeBlock returns the storage-format markup for the Confluence "code"
-macro.
-The code is placed in a CDATA section, so it is shown exactly as given; a "\]\]\>"
-sequence in the code is split so it cannot end the CDATA section early.
+Add-ConfluencePageLabel adds one or more global labels to a page through the Confluence v1 API
+(POST /wiki/rest/api/content/\<id\>/label); the v2 API has no endpoint to add labels.
+Labels
+that the page already has are left as they are.
+Confluence stores labels in lower case and
+they cannot contain spaces.
+Returns the labels of the page after the change.
+
+Supports -WhatIf and -Confirm.
 
 ## EXAMPLES
 
 ### EXAMPLE 1
 ```
-New-ConfluenceContentCodeBlock -Content 'Get-Process' -Language powershell -LineNumbers
+Add-ConfluencePageLabel -PageId 123456 -Label runbook, ops
 ```
 
-Returns a PowerShell code block macro with line numbers.
+Adds the labels runbook and ops to page 123456.
 
 ## PARAMETERS
 
-### -Content
-The code to show.
+### -PageId
+The ID of the page.
+Accepts pipeline input by property name (id).
 
 ```yaml
 Type: String
 Parameter Sets: (All)
-Aliases:
+Aliases: id
 
 Required: True
 Position: 1
 Default value: None
-Accept pipeline input: False
+Accept pipeline input: True (ByPropertyName)
 Accept wildcard characters: False
 ```
 
-### -Language
-The language used for syntax highlighting, for example powershell, bash or json.
-Default none.
+### -Label
+The label names to add.
 
 ```yaml
-Type: String
+Type: String[]
 Parameter Sets: (All)
 Aliases:
 
-Required: False
+Required: True
 Position: 2
 Default value: None
 Accept pipeline input: False
 Accept wildcard characters: False
 ```
 
-### -Theme
-The macro theme: Default, Midnight, Eclipse or Emacs.
-
-```yaml
-Type: String
-Parameter Sets: (All)
-Aliases:
-
-Required: False
-Position: 3
-Default value: Default
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
-### -LineNumbers
-Show line numbers.
+### -WhatIf
+Shows what would happen if the cmdlet runs.
+The cmdlet is not run.
 
 ```yaml
 Type: SwitchParameter
 Parameter Sets: (All)
-Aliases:
+Aliases: wi
 
 Required: False
 Position: Named
-Default value: False
+Default value: None
 Accept pipeline input: False
 Accept wildcard characters: False
 ```
 
-### -Collapse
-Collapse the code block when the page loads.
+### -Confirm
+Prompts you for confirmation before running the cmdlet.
 
 ```yaml
-Type: Boolean
+Type: SwitchParameter
 Parameter Sets: (All)
-Aliases:
+Aliases: cf
 
 Required: False
-Position: 4
-Default value: False
+Position: Named
+Default value: None
 Accept pipeline input: False
 Accept wildcard characters: False
 ```
@@ -132,7 +123,7 @@ This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable
 
 ## OUTPUTS
 
-### System.String
+### System.Management.Automation.PSCustomObject. The labels of the page.
 ## NOTES
 
 ## RELATED LINKS

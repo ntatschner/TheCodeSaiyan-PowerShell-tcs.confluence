@@ -18,17 +18,17 @@ Remove-DuplicateConfluencePage [-SpaceKey] <String> [-ParentId] <String> [-PageT
 ```
 
 ## DESCRIPTION
-Remove-DuplicateConfluencePage lists the pages in a space, finds the pages with the given title
-under the given parent and, when there is more than one, deletes all but one.
-By default the
-newest page (highest version number, then latest modification) is kept; use
--KeepNewest:$false to keep the oldest.
+Remove-DuplicateConfluencePage asks Confluence for every page in the space with exactly the
+given title (all result pages are read), keeps those under the given parent and, when there is
+more than one, deletes all but one.
+By default the newest page (latest creation date, createdAt)
+is kept; use -KeepNewest:$false to keep the oldest.
+The version number is not used, because
+an old page that was edited often has a higher version than a newer copy.
 
 Every deletion asks for confirmation unless you pass -Confirm:$false; -WhatIf shows what would
 be deleted.
 The kept page is returned.
-Only the pages returned by Get-ConfluencePage for the
-space (up to three API result pages) are considered.
 
 Called as Remove-DuplicateConfluencePages (the name used before 0.1.0) it still works through
 an alias.
@@ -55,17 +55,14 @@ Deletes all but the oldest duplicate without prompting.
 The key or numeric ID of the space to search.
 
 ```yaml
-Type:String
-Parameter Sets:   (All)
+Type: String
+Parameter Sets: (All)
 Aliases:
+
 Required: True
-Position: 1Default
-Default value: None
+Position: 1
 Default value: None
 Accept pipeline input: False
-input:False
-Accept pipeline input: False
-Accept wildcard characters: False
 Accept wildcard characters: False
 ```
 
@@ -73,17 +70,14 @@ Accept wildcard characters: False
 The ID of the parent page of the duplicates.
 
 ```yaml
-Type:String
-Parameter Sets:   (All)
+Type: String
+Parameter Sets: (All)
 Aliases:
+
 Required: True
-Position: 2Default
-Default value: None
+Position: 2
 Default value: None
 Accept pipeline input: False
-input:False
-Accept pipeline input: False
-Accept wildcard characters: False
 Accept wildcard characters: False
 ```
 
@@ -91,37 +85,30 @@ Accept wildcard characters: False
 The exact title of the duplicated page.
 
 ```yaml
-Type:String
-Parameter Sets:   (All)
+Type: String
+Parameter Sets: (All)
 Aliases:
+
 Required: True
-Position: 3Default
-Default value: None
+Position: 3
 Default value: None
 Accept pipeline input: False
-input:False
-Accept pipeline input: False
-Accept wildcard characters: False
 Accept wildcard characters: False
 ```
 
 ### -KeepNewest
-Keep the newest page (default).
+Keep the most recently created page (default).
 Use -KeepNewest:$false to keep the oldest page instead.
 
 ```yaml
-Type:Switch
-Parameter Sets:   (All)
+Type: SwitchParameter
+Parameter Sets: (All)
 Aliases:
+
 Required: False
-Position:Named
-Default value: None
-Default value: None
+Position: Named
 Default value: False
 Accept pipeline input: False
-input:False
-Accept pipeline input: False
-Accept wildcard characters: False
 Accept wildcard characters: False
 ```
 
@@ -130,18 +117,14 @@ Shows what would happen if the cmdlet runs.
 The cmdlet is not run.
 
 ```yaml
-Type:Switch
-Parameter Sets:   (All)
-Aliases:wi
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases: wi
+
 Required: False
-Position:Named
-Default value: None
-Default value: None
+Position: Named
 Default value: None
 Accept pipeline input: False
-input:False
-Accept pipeline input: False
-Accept wildcard characters: False
 Accept wildcard characters: False
 ```
 
@@ -149,18 +132,14 @@ Accept wildcard characters: False
 Prompts you for confirmation before running the cmdlet.
 
 ```yaml
-Type:Switch
-Parameter Sets:   (All)
-Aliases:cf
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases: cf
+
 Required: False
-Position:Named
-Default value: None
-Default value: None
+Position: Named
 Default value: None
 Accept pipeline input: False
-input:False
-Accept pipeline input: False
-Accept wildcard characters: False
 Accept wildcard characters: False
 ```
 
@@ -168,18 +147,14 @@ Accept wildcard characters: False
 {{ Fill ProgressAction Description }}
 
 ```yaml
-Type:ActionPreference
-Parameter Sets:   (All)
-Aliases:proga
+Type: ActionPreference
+Parameter Sets: (All)
+Aliases: proga
+
 Required: False
-Position:Named
-Default value: None
-Default value: None
+Position: Named
 Default value: None
 Accept pipeline input: False
-input:False
-Accept pipeline input: False
-Accept wildcard characters: False
 Accept wildcard characters: False
 ```
 

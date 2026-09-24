@@ -18,14 +18,19 @@ ConvertTo-ConfluenceHTML [-InputContent] <String> [-InputFormat] <String> [-Prog
 ```
 
 ## DESCRIPTION
-ConvertTo-ConfluenceHTML performs a lightweight, regex-based Markdown conversion.
+ConvertTo-ConfluenceHTML performs a lightweight, line-based Markdown conversion.
 Supported:
-headings (# to ######), **bold**, *italic*, "- " bullet lists, fenced code blocks (\`\`\`), which
-may span several lines and whose content is HTML-encoded and left untouched by the other
-rules, and table rows (| a | b |), each converted to a single-cell table row.
+headings (# to ######), **bold**, *italic*, bullet lists ("- " or "* "; consecutive items share
+one list), fenced code blocks (\`\`\`), whose content is kept exactly and left untouched by the
+other rules, and tables: consecutive | a | b | lines become one table, a |---|---| separator
+row is skipped and marks the row above it as the header row.
 
-It is not a full Markdown parser; nested lists, links, images and inline code are left as they
-are.
+All text is escaped (& \< \>), so the result is well-formed storage format and HTML in the
+Markdown is shown as text.
+Other lines are passed through as escaped text, one per line.
+
+It is not a full Markdown parser; nested lists, links, images and inline code are left as
+text.
 
 ## EXAMPLES
 
@@ -36,23 +41,27 @@ ConvertTo-ConfluenceHTML -InputFormat Markdown -InputContent "# Title`n- one`n- 
 
 Returns \<h1\>Title\</h1\> followed by \<ul\>\<li\>one\</li\>\<li\>two\</li\>\</ul\>.
 
+### EXAMPLE 2
+```
+ConvertTo-ConfluenceHTML -InputFormat Markdown -InputContent "| Name | Count |`n|---|---|`n| a | 1 |"
+```
+
+Returns one table with a header row (Name, Count) and one data row.
+
 ## PARAMETERS
 
 ### -InputContent
 The Markdown text to convert.
 
 ```yaml
-Type:String
-Parameter Sets:   (All)
+Type: String
+Parameter Sets: (All)
 Aliases:
+
 Required: True
-Position: 1Default
-Default value: None
+Position: 1
 Default value: None
 Accept pipeline input: False
-input:False
-Accept pipeline input: False
-Accept wildcard characters: False
 Accept wildcard characters: False
 ```
 
@@ -61,17 +70,14 @@ The format of the input.
 Only Markdown is supported.
 
 ```yaml
-Type:String
-Parameter Sets:   (All)
+Type: String
+Parameter Sets: (All)
 Aliases:
+
 Required: True
-Position: 2Default
-Default value: None
+Position: 2
 Default value: None
 Accept pipeline input: False
-input:False
-Accept pipeline input: False
-Accept wildcard characters: False
 Accept wildcard characters: False
 ```
 
@@ -79,18 +85,14 @@ Accept wildcard characters: False
 {{ Fill ProgressAction Description }}
 
 ```yaml
-Type:ActionPreference
-Parameter Sets:   (All)
-Aliases:proga
+Type: ActionPreference
+Parameter Sets: (All)
+Aliases: proga
+
 Required: False
-Position:Named
-Default value: None
-Default value: None
+Position: Named
 Default value: None
 Accept pipeline input: False
-input:False
-Accept pipeline input: False
-Accept wildcard characters: False
 Accept wildcard characters: False
 ```
 

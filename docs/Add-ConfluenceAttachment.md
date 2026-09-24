@@ -5,70 +5,95 @@ online version:
 schema: 2.0.0
 ---
 
-# Remove-ConfluencePage
+# Add-ConfluenceAttachment
 
 ## SYNOPSIS
-Deletes a Confluence page.
+Uploads files as attachments to a Confluence page.
 
 ## SYNTAX
 
 ```
-Remove-ConfluencePage [-PageId] <String> [-Purge] [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm]
- [<CommonParameters>]
+Add-ConfluenceAttachment [-PageId] <String> [-Path] <String[]> [[-Comment] <String>] [-NotifyWatchers]
+ [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
-Remove-ConfluencePage deletes the page with the given ID through the Confluence v2 pages API.
-The page moves to the space trash; with -Purge it is then permanently deleted from the trash
-(this needs space admin permission and cannot be undone).
-Because this changes the site, you
-are asked to confirm unless you pass -Confirm:$false; -WhatIf shows what would be deleted.
+Add-ConfluenceAttachment uploads one or more files to a page through the Confluence v1 API
+(PUT /wiki/rest/api/content/\<id\>/child/attachment, multipart/form-data with the
+X-Atlassian-Token: no-check header); the v2 API has no upload endpoint.
+When the page already
+has an attachment with the same file name, a new version of that attachment is created.
+Returns the created or updated attachments.
+
+Supports -WhatIf and -Confirm.
 
 ## EXAMPLES
 
 ### EXAMPLE 1
 ```
-Remove-ConfluencePage -PageId 123456
+Add-ConfluenceAttachment -PageId 123456 -Path ./report.pdf -Comment 'Nightly report'
 ```
 
-Asks for confirmation, then deletes page 123456.
+Attaches report.pdf to page 123456, or adds a new version of it.
 
 ### EXAMPLE 2
 ```
-Get-ConfluencePage -SpaceKey DOCS -Search 'Draft*' | Remove-ConfluencePage -WhatIf
+Get-ChildItem ./out/*.png | Add-ConfluenceAttachment -PageId 123456
 ```
 
-Shows which draft pages would be deleted without deleting them.
-
-### EXAMPLE 3
-```
-Remove-ConfluencePage -PageId 123456 -Purge -Confirm:$false
-```
-
-Deletes page 123456 and purges it from the trash.
+Attaches every PNG file in ./out.
 
 ## PARAMETERS
 
 ### -PageId
-The ID of the page to delete.
-Accepts pipeline input by property name (id), for example the
-pages written by Get-ConfluencePage.
+The ID of the page to attach the files to.
 
 ```yaml
 Type: String
 Parameter Sets: (All)
-Aliases: id
+Aliases:
 
 Required: True
 Position: 1
 Default value: None
-Accept pipeline input: True (ByPropertyName)
+Accept pipeline input: False
 Accept wildcard characters: False
 ```
 
-### -Purge
-Permanently delete the page: it is moved to the trash (if it is not there already) and then
-purged with DELETE /wiki/api/v2/pages/\<id\>?purge=true.
+### -Path
+The files to upload.
+Accepts pipeline input (for example from Get-ChildItem).
+
+```yaml
+Type: String[]
+Parameter Sets: (All)
+Aliases: FullName
+
+Required: True
+Position: 2
+Default value: None
+Accept pipeline input: True (ByPropertyName, ByValue)
+Accept wildcard characters: False
+```
+
+### -Comment
+A comment stored with each attachment version.
+
+```yaml
+Type: String
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: 3
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -NotifyWatchers
+Notify the page watchers.
+By default the upload is a minor edit and watchers are not notified.
 
 ```yaml
 Type: SwitchParameter
@@ -135,7 +160,7 @@ This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable
 
 ## OUTPUTS
 
-### None.
+### System.Management.Automation.PSCustomObject. One object per attachment.
 ## NOTES
 
 ## RELATED LINKS

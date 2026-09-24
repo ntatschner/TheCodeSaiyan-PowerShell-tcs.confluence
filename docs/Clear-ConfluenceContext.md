@@ -5,62 +5,62 @@ online version:
 schema: 2.0.0
 ---
 
-# Join-ConfluenceContent
+# Clear-ConfluenceContext
 
 ## SYNOPSIS
-Joins blocks of Confluence content with a separator.
+Removes the Confluence site and credential stored by Set-ConfluenceContext.
 
 ## SYNTAX
 
 ```
-Join-ConfluenceContent [-ContentBlocks] <String[]> [[-Separator] <String>] [-ProgressAction <ActionPreference>]
- [<CommonParameters>]
+Clear-ConfluenceContext [-ProgressAction <ActionPreference>] [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
-Join-ConfluenceContent concatenates storage-format content blocks, such as the output of the
-New-ConfluenceContent* functions, with a horizontal rule, line break, space or tab between them.
+Clear-ConfluenceContext forgets the connection and the in-memory credential for the current
+session, and clears the cached space key to space ID lookups.
+REST commands report that no
+context is set until Set-ConfluenceContext is run again.
+Nothing is written to disk.
 
 ## EXAMPLES
 
 ### EXAMPLE 1
 ```
-Text</p>' -Separator HorizontalRule
+Clear-ConfluenceContext
 ```
 
-Returns \<h1\>Intro\</h1\>\<hr /\>\<p\>Text\</p\>.
+Signs the session out of Confluence.
 
 ## PARAMETERS
 
-### -ContentBlocks
-The content blocks to join, in order.
+### -WhatIf
+Shows what would happen if the cmdlet runs.
+The cmdlet is not run.
 
 ```yaml
-Type: String[]
+Type: SwitchParameter
 Parameter Sets: (All)
-Aliases:
+Aliases: wi
 
-Required: True
-Position: 1
+Required: False
+Position: Named
 Default value: None
 Accept pipeline input: False
 Accept wildcard characters: False
 ```
 
-### -Separator
-The separator between blocks: NewLine (\<br /\>, default), HorizontalRule (\<hr /\>),
-Space (&#160;, a non-breaking space) or Tab (&#8195;, an em space).
-Numeric character
-references are used so the result is well-formed XML.
+### -Confirm
+Prompts you for confirmation before running the cmdlet.
 
 ```yaml
-Type: String
+Type: SwitchParameter
 Parameter Sets: (All)
-Aliases:
+Aliases: cf
 
 Required: False
-Position: 2
-Default value: NewLine
+Position: Named
+Default value: None
 Accept pipeline input: False
 Accept wildcard characters: False
 ```
@@ -87,7 +87,7 @@ This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable
 
 ## OUTPUTS
 
-### System.String
+### None.
 ## NOTES
 
 ## RELATED LINKS

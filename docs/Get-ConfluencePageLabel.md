@@ -5,53 +5,54 @@ online version:
 schema: 2.0.0
 ---
 
-# Join-ConfluenceContent
+# Get-ConfluencePageLabel
 
 ## SYNOPSIS
-Joins blocks of Confluence content with a separator.
+Gets the labels of a Confluence page.
 
 ## SYNTAX
 
 ```
-Join-ConfluenceContent [-ContentBlocks] <String[]> [[-Separator] <String>] [-ProgressAction <ActionPreference>]
+Get-ConfluencePageLabel [-PageId] <String> [[-Prefix] <String>] [-ProgressAction <ActionPreference>]
  [<CommonParameters>]
 ```
 
 ## DESCRIPTION
-Join-ConfluenceContent concatenates storage-format content blocks, such as the output of the
-New-ConfluenceContent* functions, with a horizontal rule, line break, space or tab between them.
+Get-ConfluencePageLabel returns the labels of a page through the Confluence v2 API
+(GET /wiki/api/v2/pages/\<id\>/labels), reading every result page.
+Each label has id, name and
+prefix (global, my or team).
 
 ## EXAMPLES
 
 ### EXAMPLE 1
 ```
-Text</p>' -Separator HorizontalRule
+Get-ConfluencePageLabel -PageId 123456 | Select-Object -ExpandProperty name
 ```
 
-Returns \<h1\>Intro\</h1\>\<hr /\>\<p\>Text\</p\>.
+Lists the label names of page 123456.
 
 ## PARAMETERS
 
-### -ContentBlocks
-The content blocks to join, in order.
+### -PageId
+The ID of the page.
+Accepts pipeline input by property name (id), for example from
+Get-ConfluencePage.
 
 ```yaml
-Type: String[]
+Type: String
 Parameter Sets: (All)
-Aliases:
+Aliases: id
 
 Required: True
 Position: 1
 Default value: None
-Accept pipeline input: False
+Accept pipeline input: True (ByPropertyName)
 Accept wildcard characters: False
 ```
 
-### -Separator
-The separator between blocks: NewLine (\<br /\>, default), HorizontalRule (\<hr /\>),
-Space (&#160;, a non-breaking space) or Tab (&#8195;, an em space).
-Numeric character
-references are used so the result is well-formed XML.
+### -Prefix
+Only return labels with this prefix: global, my or team.
 
 ```yaml
 Type: String
@@ -60,7 +61,7 @@ Aliases:
 
 Required: False
 Position: 2
-Default value: NewLine
+Default value: None
 Accept pipeline input: False
 Accept wildcard characters: False
 ```
@@ -87,7 +88,7 @@ This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable
 
 ## OUTPUTS
 
-### System.String
+### System.Management.Automation.PSCustomObject. One object per label.
 ## NOTES
 
 ## RELATED LINKS

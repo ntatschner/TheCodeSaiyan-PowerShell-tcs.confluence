@@ -26,8 +26,12 @@ New-ConfluenceContentLink -TextBlock <String> [-ProgressAction <ActionPreference
 ## DESCRIPTION
 With -Url, New-ConfluenceContentLink returns an \<a\> element that shows -LinkText (or the URL
 when no text is given).
-With -TextBlock, every web address found in the text is replaced by a
-link to itself.
+With -TextBlock, every address with a scheme (http://, https:// or
+mailto:) found in the text is replaced by a link to itself; file names such as report.pdf and
+bare e-mail addresses are left as text.
+
+The URL, the link text and the text block are escaped (& \< \> and quotes), so the result is
+always well-formed storage format.
 
 ## EXAMPLES
 
@@ -52,18 +56,14 @@ The text shown for the link.
 Defaults to the URL.
 
 ```yaml
-Type:String
+Type: String
 Parameter Sets: Url
 Aliases:
+
 Required: False
-Position:Named
-Default value: None
-Default value: None
+Position: Named
 Default value: None
 Accept pipeline input: False
-input:False
-Accept pipeline input: False
-Accept wildcard characters: False
 Accept wildcard characters: False
 ```
 
@@ -71,37 +71,29 @@ Accept wildcard characters: False
 The address to link to.
 
 ```yaml
-Type:String
+Type: String
 Parameter Sets: Url
 Aliases:
+
 Required: True
-Position:Named
-Default value: None
-Default value: None
+Position: Named
 Default value: None
 Accept pipeline input: False
-input:False
-Accept pipeline input: False
-Accept wildcard characters: False
 Accept wildcard characters: False
 ```
 
 ### -TextBlock
-Text in which every URL is converted to a link.
+Text in which every http, https or mailto address is converted to a link.
 
 ```yaml
-Type:String
+Type: String
 Parameter Sets: TextBlock
 Aliases:
+
 Required: True
-Position:Named
-Default value: None
-Default value: None
+Position: Named
 Default value: None
 Accept pipeline input: False
-input:False
-Accept pipeline input: False
-Accept wildcard characters: False
 Accept wildcard characters: False
 ```
 
@@ -109,18 +101,14 @@ Accept wildcard characters: False
 {{ Fill ProgressAction Description }}
 
 ```yaml
-Type:ActionPreference
-Parameter Sets:   (All)
-Aliases:proga
+Type: ActionPreference
+Parameter Sets: (All)
+Aliases: proga
+
 Required: False
-Position:Named
-Default value: None
-Default value: None
+Position: Named
 Default value: None
 Accept pipeline input: False
-input:False
-Accept pipeline input: False
-Accept wildcard characters: False
 Accept wildcard characters: False
 ```
 
