@@ -12,6 +12,7 @@
         @{ ModuleName = 'tcs.core'; ModuleVersion = '0.3.0' }
     )
     FunctionsToExport    = @(
+        'Clear-ConfluenceContext',
         'ConvertTo-ConfluenceHTML',
         'Get-ConfluenceContext',
         'Get-ConfluencePage',

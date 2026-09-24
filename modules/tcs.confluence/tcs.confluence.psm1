@@ -21,6 +21,8 @@ foreach ($File in @($ClassFiles + $Private + $Public)) {
 # and is never returned by Get-ConfluenceContext or written to any output stream.
 $script:ConfluenceContext = $null
 $script:ConfluenceCredential = $null
+# Space key -> space ID lookups, cleared whenever the context changes
+$script:ConfluenceSpaceIdCache = $null
 #endregion
 
 #region module config, load telemetry and update check (never blocks import)
