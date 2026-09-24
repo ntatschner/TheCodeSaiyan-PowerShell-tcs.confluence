@@ -61,42 +61,62 @@ function New-ConfluenceContentInternalLink {
         [string]$LinkText
     )
 
-    if ($PSCmdlet.ParameterSetName -eq 'InternalLinkURL') {
-        $Link = $InternalLinkURL.TrimEnd('/') + '/'
+    $TelemetryArgs = @{
+        ModuleName    = $MyInvocation.MyCommand.Module.Name
+        ModuleVersion = [string]$MyInvocation.MyCommand.Module.Version
+        CommandName   = $MyInvocation.MyCommand.Name
+        ExecutionID   = [guid]::NewGuid().ToString()
     }
-    else {
-        $context = Get-ConfluenceContext
-        if (-not $context) {
-            Write-Error 'No Confluence context is set. Run Set-ConfluenceContext first.'
-            return
+    Invoke-TelemetryCollection @TelemetryArgs -Stage Start -ClearTimer
+    $telemetryFailed = $false
+    try {
+        if ($PSCmdlet.ParameterSetName -eq 'InternalLinkURL') {
+            $Link = $InternalLinkURL.TrimEnd('/') + '/'
         }
-        $page = (Get-ConfluencePage -PageId $PageId -ErrorAction Stop).Results | Select-Object -First 1
-        $webUi = if ($page -and $page._links) { $page._links.webui } else { $null }
-        if (-not $webUi) {
-            Write-Error "Could not find the web URL of page $PageId."
-            return
-        }
-        $Link = $context.ConnectionBaseURL + '/wiki' + $webUi
-        if (-not $PageTitle) { $PageTitle = $page.title }
-    }
-    Write-Verbose "Link: $Link"
-
-    if ($HeadingLink) {
-        if (-not $PageTitle) {
-            $parsedId = [regex]::Match($Link, '/pages/(\d+)(/|$)').Groups[1].Value
-            Write-Verbose "Parsed page ID: $parsedId"
-            if (-not $parsedId) {
-                Write-Error "Could not find a page ID in '$Link'. Pass -PageTitle to link to a heading."
+        else {
+            $context = Get-ConfluenceContext
+            if (-not $context) {
+                Write-Error 'No Confluence context is set. Run Set-ConfluenceContext first.'
                 return
             }
-            $PageTitle = ((Get-ConfluencePage -PageId $parsedId -ErrorAction Stop).Results | Select-Object -First 1).title
+            $page = (Get-ConfluencePage -PageId $PageId -ErrorAction Stop).Results | Select-Object -First 1
+            $webUi = if ($page -and $page._links) { $page._links.webui } else { $null }
+            if (-not $webUi) {
+                Write-Error "Could not find the web URL of page $PageId."
+                return
+            }
+            $Link = $context.ConnectionBaseURL + '/wiki' + $webUi
+            if (-not $PageTitle) { $PageTitle = $page.title }
         }
-        $Link = $Link + '#' + ($PageTitle -replace ' ', '') + '-' + ($HeadingLink -replace ' ', '')
         Write-Verbose "Link: $Link"
-    }
 
-    if ($LinkText) {
-        return (New-ConfluenceContentLink -Url $Link -LinkText $LinkText)
+        if ($HeadingLink) {
+            if (-not $PageTitle) {
+                $parsedId = [regex]::Match($Link, '/pages/(\d+)(/|$)').Groups[1].Value
+                Write-Verbose "Parsed page ID: $parsedId"
+                if (-not $parsedId) {
+                    Write-Error "Could not find a page ID in '$Link'. Pass -PageTitle to link to a heading."
+                    return
+                }
+                $PageTitle = ((Get-ConfluencePage -PageId $parsedId -ErrorAction Stop).Results | Select-Object -First 1).title
+            }
+            $Link = $Link + '#' + ($PageTitle -replace ' ', '') + '-' + ($HeadingLink -replace ' ', '')
+            Write-Verbose "Link: $Link"
+        }
+
+        if ($LinkText) {
+            return (New-ConfluenceContentLink -Url $Link -LinkText $LinkText)
+        }
+        return (New-ConfluenceContentLink -Url $Link)
     }
-    return (New-ConfluenceContentLink -Url $Link)
+    catch {
+        $telemetryFailed = $true
+        Invoke-TelemetryCollection @TelemetryArgs -Stage End -Failed $true -Exception $_
+        throw
+    }
+    finally {
+        if (-not $telemetryFailed) {
+            Invoke-TelemetryCollection @TelemetryArgs -Stage End
+        }
+    }
 }

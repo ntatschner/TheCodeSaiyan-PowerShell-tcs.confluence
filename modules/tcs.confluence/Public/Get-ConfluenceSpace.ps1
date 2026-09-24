@@ -54,6 +54,14 @@ function Get-ConfluenceSpace {
         [int16]$MaxQueryPages = 3
     )
 
+    $TelemetryArgs = @{
+        ModuleName    = $MyInvocation.MyCommand.Module.Name
+        ModuleVersion = [string]$MyInvocation.MyCommand.Module.Version
+        CommandName   = $MyInvocation.MyCommand.Name
+        ExecutionID   = [guid]::NewGuid().ToString()
+    }
+    Invoke-TelemetryCollection @TelemetryArgs -Stage Start -ClearTimer
+    $telemetryFailed = $false
     try {
         if ($PSCmdlet.ParameterSetName -eq 'SpaceId') {
             return (Invoke-ConfluenceRequest -Method GET -Resource spaces -Id $SpaceId -MaxQueryPages 1 -ErrorAction Stop)
@@ -67,6 +75,13 @@ function Get-ConfluenceSpace {
         return $results
     }
     catch {
+        $telemetryFailed = $true
+        Invoke-TelemetryCollection @TelemetryArgs -Stage End -Failed $true -Exception $_
         Write-Error "Failed to retrieve space information. Error: $_"
+    }
+    finally {
+        if (-not $telemetryFailed) {
+            Invoke-TelemetryCollection @TelemetryArgs -Stage End
+        }
     }
 }

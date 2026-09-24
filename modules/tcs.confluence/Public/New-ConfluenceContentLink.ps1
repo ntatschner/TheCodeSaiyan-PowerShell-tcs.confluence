@@ -45,16 +45,36 @@ function New-ConfluenceContentLink {
         [string]$TextBlock
     )
 
-    if ($PSCmdlet.ParameterSetName -eq 'TextBlock') {
-        $Pattern = '\b((http|https):\/\/)?((www\.)?([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,})(\/[a-zA-Z0-9-._~:\/?#[\]@!$&''()*+,;=]*)?\b'
-        # A MatchEvaluator works on Windows PowerShell 5.1, where -replace does not accept a script block
-        $evaluator = [System.Text.RegularExpressions.MatchEvaluator] {
-            param($Match)
-            "<a href='$($Match.Value)'>$($Match.Value)</a>"
-        }
-        return [regex]::Replace($TextBlock, $Pattern, $evaluator)
+    $TelemetryArgs = @{
+        ModuleName    = $MyInvocation.MyCommand.Module.Name
+        ModuleVersion = [string]$MyInvocation.MyCommand.Module.Version
+        CommandName   = $MyInvocation.MyCommand.Name
+        ExecutionID   = [guid]::NewGuid().ToString()
     }
+    Invoke-TelemetryCollection @TelemetryArgs -Stage Start -ClearTimer
+    $telemetryFailed = $false
+    try {
+        if ($PSCmdlet.ParameterSetName -eq 'TextBlock') {
+            $Pattern = '\b((http|https):\/\/)?((www\.)?([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,})(\/[a-zA-Z0-9-._~:\/?#[\]@!$&''()*+,;=]*)?\b'
+            # A MatchEvaluator works on Windows PowerShell 5.1, where -replace does not accept a script block
+            $evaluator = [System.Text.RegularExpressions.MatchEvaluator] {
+                param($Match)
+                "<a href='$($Match.Value)'>$($Match.Value)</a>"
+            }
+            return [regex]::Replace($TextBlock, $Pattern, $evaluator)
+        }
 
-    if (-not $LinkText) { $LinkText = $Url }
-    return "<a href='$Url'>$LinkText</a>"
+        if (-not $LinkText) { $LinkText = $Url }
+        return "<a href='$Url'>$LinkText</a>"
+    }
+    catch {
+        $telemetryFailed = $true
+        Invoke-TelemetryCollection @TelemetryArgs -Stage End -Failed $true -Exception $_
+        throw
+    }
+    finally {
+        if (-not $telemetryFailed) {
+            Invoke-TelemetryCollection @TelemetryArgs -Stage End
+        }
+    }
 }

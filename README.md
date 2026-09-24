@@ -117,7 +117,7 @@ for all settings and environment variables.
 ## Privacy and telemetry
 
 tcs modules send anonymous usage telemetry to help find failing commands. tcs.confluence records
-one event when the module is loaded. Telemetry is on by default and a notice is shown the first
+one event when the module is loaded and one each time an exported command runs. Telemetry is on by default and a notice is shown the first
 time a module is loaded. Nothing is sent until a telemetry endpoint is configured.
 
 Each event contains: time (UTC), module and command name, module version, duration, success,

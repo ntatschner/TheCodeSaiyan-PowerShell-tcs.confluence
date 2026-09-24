@@ -61,6 +61,14 @@ function Remove-DuplicateConfluencePage {
     if (-not $PSBoundParameters.ContainsKey('KeepNewest')) { $KeepNewest = $true }
     Write-Verbose "Looking for duplicate pages Title='$PageTitle' ParentId='$ParentId' SpaceKey='$SpaceKey' KeepNewest=$KeepNewest"
 
+    $TelemetryArgs = @{
+        ModuleName    = $MyInvocation.MyCommand.Module.Name
+        ModuleVersion = [string]$MyInvocation.MyCommand.Module.Version
+        CommandName   = $MyInvocation.MyCommand.Name
+        ExecutionID   = [guid]::NewGuid().ToString()
+    }
+    Invoke-TelemetryCollection @TelemetryArgs -Stage Start -ClearTimer
+    $telemetryFailed = $false
     try {
         $all = Get-ConfluencePage -SpaceKey $SpaceKey -ErrorAction Stop
         $pagesCollection = @($all.Results | Where-Object { $null -ne $_ })
@@ -104,6 +112,13 @@ function Remove-DuplicateConfluencePage {
         return $pageToKeep
     }
     catch {
+        $telemetryFailed = $true
+        Invoke-TelemetryCollection @TelemetryArgs -Stage End -Failed $true -Exception $_
         Write-Error "Error removing duplicate pages. $_"
+    }
+    finally {
+        if (-not $telemetryFailed) {
+            Invoke-TelemetryCollection @TelemetryArgs -Stage End
+        }
     }
 }

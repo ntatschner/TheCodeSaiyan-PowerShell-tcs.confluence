@@ -130,6 +130,14 @@ function Get-HtmlTableRowData {
 
     Begin {
         Write-Verbose "[$((Get-Date).TimeOfDay)] Function Start."
+        $TelemetryArgs = @{
+            ModuleName    = $MyInvocation.MyCommand.Module.Name
+            ModuleVersion = [string]$MyInvocation.MyCommand.Module.Version
+            CommandName   = $MyInvocation.MyCommand.Name
+            ExecutionID   = [guid]::NewGuid().ToString()
+        }
+        Invoke-TelemetryCollection @TelemetryArgs -Stage Start -ClearTimer
+        $telemetryFailed = $false
     }
 
     Process {
@@ -137,157 +145,169 @@ function Get-HtmlTableRowData {
     }
 
     End {
-        Write-Verbose "[$((Get-Date).TimeOfDay)] End block started. Processing TableIndex $TableIndex."
+        try {
+            Write-Verbose "[$((Get-Date).TimeOfDay)] End block started. Processing TableIndex $TableIndex."
 
-        # 1. Find the specified table
-        $tableMatches = [regex]::Matches($HtmlContent, '(?si)<table.*?>.*?</table>')
-        if ($tableMatches.Count -eq 0) { Write-Warning "No <table> elements found."; return $null }
-        if ($TableIndex -ge $tableMatches.Count) { Write-Warning "TableIndex $TableIndex out of bounds (Found $($tableMatches.Count))."; return $null }
-        $targetTableHtml = $tableMatches[$TableIndex].Value
-        Write-Verbose "Found target table (Index $TableIndex)."
+            # 1. Find the specified table
+            $tableMatches = [regex]::Matches($HtmlContent, '(?si)<table.*?>.*?</table>')
+            if ($tableMatches.Count -eq 0) { Write-Warning "No <table> elements found."; return $null }
+            if ($TableIndex -ge $tableMatches.Count) { Write-Warning "TableIndex $TableIndex out of bounds (Found $($tableMatches.Count))."; return $null }
+            $targetTableHtml = $tableMatches[$TableIndex].Value
+            Write-Verbose "Found target table (Index $TableIndex)."
 
-        # 2. Extract Column Headers (if not -NoHeader)
-        [string[]]$columnHeaders = @()
-        $maxDataCellsFound = 0
+            # 2. Extract Column Headers (if not -NoHeader)
+            [string[]]$columnHeaders = @()
+            $maxDataCellsFound = 0
 
-        if (-not $NoHeader.IsPresent) {
-            Write-Verbose "Attempting to detect column headers from <thead>..."
-            $theadMatch = [regex]::Match($targetTableHtml, '(?si)<thead>(.*?)</thead>')
-            if ($theadMatch.Success) {
-                $headerRowMatch = [regex]::Match($theadMatch.Groups[1].Value, '(?si)<tr.*?>(.*?)</tr>')
-                if ($headerRowMatch.Success) {
-                    $thMatches = [regex]::Matches($headerRowMatch.Groups[1].Value, '(?si)<th.*?>(.*?)</th>')
-                    if ($thMatches.Count -gt 0) {
-                        $startIndex = 0; if ($thMatches.Count -gt 1 -and [string]::IsNullOrWhiteSpace(($thMatches[0].Groups[1].Value -replace '<.*?>', ''))) { Write-Verbose "Skipping first potential empty corner header cell."; $startIndex = 1 }
-                        # Process headers: Decode entities FIRST, then strip tags
-                        $columnHeaders = $thMatches[$startIndex..($thMatches.Count - 1)] | ForEach-Object {
-                            $headerText = $_.Groups[1].Value.Trim()
-                            if ($DecodeHtmlEntities) { try { $headerText = [System.Net.WebUtility]::HtmlDecode($headerText) } catch { Write-Warning "Header decode error: $($_.Exception.Message)" } }
-                            $headerText -replace '<.*?>', '' # Strip tags last
-                        }
-                        Write-Verbose "Detected Column Headers: $($columnHeaders -join ', ')"
-                    } else { Write-Verbose "Found <thead>/<tr> but no <th> tags. Using default names." }
-                } else { Write-Verbose "Found <thead> but no <tr> tags. Using default names." }
-            } else { Write-Verbose "No <thead> found. Using default names." }
-        } else { Write-Verbose "-NoHeader specified. Using default column names for data cells." }
+            if (-not $NoHeader.IsPresent) {
+                Write-Verbose "Attempting to detect column headers from <thead>..."
+                $theadMatch = [regex]::Match($targetTableHtml, '(?si)<thead>(.*?)</thead>')
+                if ($theadMatch.Success) {
+                    $headerRowMatch = [regex]::Match($theadMatch.Groups[1].Value, '(?si)<tr.*?>(.*?)</tr>')
+                    if ($headerRowMatch.Success) {
+                        $thMatches = [regex]::Matches($headerRowMatch.Groups[1].Value, '(?si)<th.*?>(.*?)</th>')
+                        if ($thMatches.Count -gt 0) {
+                            $startIndex = 0; if ($thMatches.Count -gt 1 -and [string]::IsNullOrWhiteSpace(($thMatches[0].Groups[1].Value -replace '<.*?>', ''))) { Write-Verbose "Skipping first potential empty corner header cell."; $startIndex = 1 }
+                            # Process headers: Decode entities FIRST, then strip tags
+                            $columnHeaders = $thMatches[$startIndex..($thMatches.Count - 1)] | ForEach-Object {
+                                $headerText = $_.Groups[1].Value.Trim()
+                                if ($DecodeHtmlEntities) { try { $headerText = [System.Net.WebUtility]::HtmlDecode($headerText) } catch { Write-Warning "Header decode error: $($_.Exception.Message)" } }
+                                $headerText -replace '<.*?>', '' # Strip tags last
+                            }
+                            Write-Verbose "Detected Column Headers: $($columnHeaders -join ', ')"
+                        } else { Write-Verbose "Found <thead>/<tr> but no <th> tags. Using default names." }
+                    } else { Write-Verbose "Found <thead> but no <tr> tags. Using default names." }
+                } else { Write-Verbose "No <thead> found. Using default names." }
+            } else { Write-Verbose "-NoHeader specified. Using default column names for data cells." }
 
-        # 3. Extract Body Content
-        Write-Verbose "Extracting content from <tbody>..."
-        $tbodyMatch = [regex]::Match($targetTableHtml, '(?si)<tbody.*?>(.*?)</tbody>')
-        $tbodyContent = ""
-        if (-not $tbodyMatch.Success) {
-            Write-Warning "No <tbody> found. Attempting fallback extraction (may be inaccurate)."
-            # Fallback logic (remains simplified)
-            $headerEndIndex = 0; $headerRowMatchLocal = $null # Use local var to avoid conflict
-            if ($theadMatch.Success) { $headerEndIndex = $theadMatch.Index + $theadMatch.Length }
-            elseif ($headerRowMatchLocal = [regex]::Match($targetTableHtml, '(?si)<tr.*?>(.*?)</tr>')) { if ([regex]::IsMatch($headerRowMatchLocal.Groups[1].Value, '(?si)<th.*?>')) { $headerEndIndex = $headerRowMatchLocal.Index + $headerRowMatchLocal.Length } }
-            else { $tableTagMatch = [regex]::Match($targetTableHtml, '(?si)<table.*?>'); if ($tableTagMatch.Success) { $headerEndIndex = $tableTagMatch.Length } }
-            $endTableMatch = [regex]::Match($targetTableHtml, '(?si)</table>\s*$', [System.Text.RegularExpressions.RegexOptions]::RightToLeft)
-            if ($endTableMatch.Success -and $headerEndIndex -lt $endTableMatch.Index) { $tbodyContent = $targetTableHtml.Substring($headerEndIndex, $endTableMatch.Index - $headerEndIndex) }
-            else { Write-Warning "Could not determine body content without <tbody>."; $tbodyContent = "" }
-        } else { $tbodyContent = $tbodyMatch.Groups[1].Value; Write-Verbose "Found <tbody> content." }
-
-
-        # 4. Extract Rows
-        $outputObjects = [System.Collections.Generic.List[PSCustomObject]]::new()
-        $rowMatches = [regex]::Matches($tbodyContent, '(?si)<tr.*?>(.*?)</tr>')
-        if ($rowMatches.Count -eq 0) { Write-Warning "No data rows (<tr>) found within table body."; return @() }
-        Write-Verbose "Found $($rowMatches.Count) data row(s) (<tr>)."
+            # 3. Extract Body Content
+            Write-Verbose "Extracting content from <tbody>..."
+            $tbodyMatch = [regex]::Match($targetTableHtml, '(?si)<tbody.*?>(.*?)</tbody>')
+            $tbodyContent = ""
+            if (-not $tbodyMatch.Success) {
+                Write-Warning "No <tbody> found. Attempting fallback extraction (may be inaccurate)."
+                # Fallback logic (remains simplified)
+                $headerEndIndex = 0; $headerRowMatchLocal = $null # Use local var to avoid conflict
+                if ($theadMatch.Success) { $headerEndIndex = $theadMatch.Index + $theadMatch.Length }
+                elseif ($headerRowMatchLocal = [regex]::Match($targetTableHtml, '(?si)<tr.*?>(.*?)</tr>')) { if ([regex]::IsMatch($headerRowMatchLocal.Groups[1].Value, '(?si)<th.*?>')) { $headerEndIndex = $headerRowMatchLocal.Index + $headerRowMatchLocal.Length } }
+                else { $tableTagMatch = [regex]::Match($targetTableHtml, '(?si)<table.*?>'); if ($tableTagMatch.Success) { $headerEndIndex = $tableTagMatch.Length } }
+                $endTableMatch = [regex]::Match($targetTableHtml, '(?si)</table>\s*$', [System.Text.RegularExpressions.RegexOptions]::RightToLeft)
+                if ($endTableMatch.Success -and $headerEndIndex -lt $endTableMatch.Index) { $tbodyContent = $targetTableHtml.Substring($headerEndIndex, $endTableMatch.Index - $headerEndIndex) }
+                else { Write-Warning "Could not determine body content without <tbody>."; $tbodyContent = "" }
+            } else { $tbodyContent = $tbodyMatch.Groups[1].Value; Write-Verbose "Found <tbody> content." }
 
 
-        # --- Pre-calculate max DATA cells (<td>) if default COL headers are needed ---
-        if ($columnHeaders.Count -eq 0) {
-            Write-Verbose "Calculating maximum DATA cell (<td>) count for default headers..."
-            foreach ($rowMatch in $rowMatches) { $dataCellMatches = [regex]::Matches($rowMatch.Groups[1].Value, '(?si)<td.*?>(.*?)</td>'); if ($dataCellMatches.Count -gt $maxDataCellsFound) { $maxDataCellsFound = $dataCellMatches.Count } }
-            Write-Verbose "Maximum data cells (<td>) found in a row: $maxDataCellsFound"
-            if ($maxDataCellsFound -eq 0 -and $rowMatches.Count -gt 0) { Write-Warning "Found rows but no data cells (<td>) within them." }
-        }
-        # --- Generate default COL headers if needed ---
-        if ($columnHeaders.Count -eq 0 -and $maxDataCellsFound -gt 0) { $columnHeaders = 1..$maxDataCellsFound | ForEach-Object { "Column$_" }; Write-Verbose "Generated default column headers: $($columnHeaders -join ', ')" }
+            # 4. Extract Rows
+            $outputObjects = [System.Collections.Generic.List[PSCustomObject]]::new()
+            $rowMatches = [regex]::Matches($tbodyContent, '(?si)<tr.*?>(.*?)</tr>')
+            if ($rowMatches.Count -eq 0) { Write-Warning "No data rows (<tr>) found within table body."; return @() }
+            Write-Verbose "Found $($rowMatches.Count) data row(s) (<tr>)."
 
 
-        # --- Process each row ---
-        $rowCount = 0
-        foreach ($rowMatch in $rowMatches) {
-            $rowCount++
-            $rowHtml = $rowMatch.Groups[1].Value.Trim() # Inner HTML of the <tr>
-            $rowData = [ordered]@{}
-            $rowHeaderValue = $null
-            $dataCellsHtml = $rowHtml # Assume all cells are data initially
-
-            # --- Process Row Header Cell (if present and not disabled) ---
-            if (-not $NoRowHeader.IsPresent) {
-                $firstCellMatch = [regex]::Match($rowHtml, '(?si)^\s*<th(\s+[^>]*?)?>(.*?)</th>')
-                if ($firstCellMatch.Success) {
-                    Write-Verbose "Row $rowCount`: Found row header (<th>)."
-                    # Process header content: Decode FIRST, then handle macros, then strip remaining tags
-                    $rawHeaderContent = $firstCellMatch.Groups[2].Value
-                    $processedHeaderContent = $rawHeaderContent # Start with raw
-
-                    if ($DecodeHtmlEntities) { try { $processedHeaderContent = [System.Net.WebUtility]::HtmlDecode($processedHeaderContent) } catch { Write-Warning "Row $rowCount`: Error decoding row header: $($_.Exception.Message)." } }
-
-                    $processedHeaderContent = $processedHeaderContent -replace '(?si)<ac:userlink.*?>\s*(.*?)\s*</ac:userlink>', '$1' `
-                        -replace '(?si)<ac:link.*?>.*?<ac:plain-text-link-body>\s*<!\[CDATA\[(.*?)]]>\s*</ac:plain-text-link-body>.*?</ac:link>', '$1' `
-                        -replace '(?si)<a\s+[^>]*?href\s*=\s*".*?".*?>\s*(.*?)\s*</a>', '$1' `
-                        -replace '(?si)<ac:structured-macro\s+(?:[^>]*?\s+)?ac:name\s*=\s*"jira"(?:\s+[^>]*?)?>.*?<ac:parameter\s+(?:[^>]*?\s+)?ac:name\s*=\s*"key"(?:\s+[^>]*?)?>(.*?)</ac:parameter>.*?</ac:structured-macro>', '$1'
-                    $rowHeaderValue = ($processedHeaderContent -replace '<.*?>', '').Trim()
-
-                    $rowData[$RowHeaderColumnName] = $rowHeaderValue
-                    $dataCellsHtml = $rowHtml.Substring($firstCellMatch.Index + $firstCellMatch.Length) # Get rest of row
-                } else { Write-Verbose "Row $rowCount`: No row header (<th>) found as first element." }
+            # --- Pre-calculate max DATA cells (<td>) if default COL headers are needed ---
+            if ($columnHeaders.Count -eq 0) {
+                Write-Verbose "Calculating maximum DATA cell (<td>) count for default headers..."
+                foreach ($rowMatch in $rowMatches) { $dataCellMatches = [regex]::Matches($rowMatch.Groups[1].Value, '(?si)<td.*?>(.*?)</td>'); if ($dataCellMatches.Count -gt $maxDataCellsFound) { $maxDataCellsFound = $dataCellMatches.Count } }
+                Write-Verbose "Maximum data cells (<td>) found in a row: $maxDataCellsFound"
+                if ($maxDataCellsFound -eq 0 -and $rowMatches.Count -gt 0) { Write-Warning "Found rows but no data cells (<td>) within them." }
             }
+            # --- Generate default COL headers if needed ---
+            if ($columnHeaders.Count -eq 0 -and $maxDataCellsFound -gt 0) { $columnHeaders = 1..$maxDataCellsFound | ForEach-Object { "Column$_" }; Write-Verbose "Generated default column headers: $($columnHeaders -join ', ')" }
 
-            # --- Process Data Cells (<td>) ---
-            $cellMatches = [regex]::Matches($dataCellsHtml, '(?si)<td.*?>(.*?)</td>')
-            $cellCount = $cellMatches.Count
-            Write-Verbose "Row $rowCount`: Found $cellCount data cell(s) (<td>)."
 
-            if ($columnHeaders.Count -gt 0 -and $cellCount -ne $columnHeaders.Count) { Write-Warning "Row $rowCount`: Data cell count ($cellCount) != column header count ($($columnHeaders.Count)). Misalignment likely." }
+            # --- Process each row ---
+            $rowCount = 0
+            foreach ($rowMatch in $rowMatches) {
+                $rowCount++
+                $rowHtml = $rowMatch.Groups[1].Value.Trim() # Inner HTML of the <tr>
+                $rowData = [ordered]@{}
+                $rowHeaderValue = $null
+                $dataCellsHtml = $rowHtml # Assume all cells are data initially
 
-            $cellIndex = 0
-            foreach ($cellMatch in $cellMatches) {
-                $headerName = if ($cellIndex -lt $columnHeaders.Count) { $columnHeaders[$cellIndex] } else { "DataColumn$($cellIndex + 1)" }
-                $rawCellContent = $cellMatch.Groups[1].Value
-                $processedCellContent = $rawCellContent # Start with raw
+                # --- Process Row Header Cell (if present and not disabled) ---
+                if (-not $NoRowHeader.IsPresent) {
+                    $firstCellMatch = [regex]::Match($rowHtml, '(?si)^\s*<th(\s+[^>]*?)?>(.*?)</th>')
+                    if ($firstCellMatch.Success) {
+                        Write-Verbose "Row $rowCount`: Found row header (<th>)."
+                        # Process header content: Decode FIRST, then handle macros, then strip remaining tags
+                        $rawHeaderContent = $firstCellMatch.Groups[2].Value
+                        $processedHeaderContent = $rawHeaderContent # Start with raw
 
-                # Decode Entities FIRST - critical for accurate macro parsing
-                if ($DecodeHtmlEntities) {
-                    try { $processedCellContent = [System.Net.WebUtility]::HtmlDecode($processedCellContent) }
-                    catch { Write-Warning "Row $rowCount, Cell $($cellIndex + 1): Error decoding HTML entity: $($_.Exception.Message)." }
+                        if ($DecodeHtmlEntities) { try { $processedHeaderContent = [System.Net.WebUtility]::HtmlDecode($processedHeaderContent) } catch { Write-Warning "Row $rowCount`: Error decoding row header: $($_.Exception.Message)." } }
+
+                        $processedHeaderContent = $processedHeaderContent -replace '(?si)<ac:userlink.*?>\s*(.*?)\s*</ac:userlink>', '$1' `
+                            -replace '(?si)<ac:link.*?>.*?<ac:plain-text-link-body>\s*<!\[CDATA\[(.*?)]]>\s*</ac:plain-text-link-body>.*?</ac:link>', '$1' `
+                            -replace '(?si)<a\s+[^>]*?href\s*=\s*".*?".*?>\s*(.*?)\s*</a>', '$1' `
+                            -replace '(?si)<ac:structured-macro\s+(?:[^>]*?\s+)?ac:name\s*=\s*"jira"(?:\s+[^>]*?)?>.*?<ac:parameter\s+(?:[^>]*?\s+)?ac:name\s*=\s*"key"(?:\s+[^>]*?)?>(.*?)</ac:parameter>.*?</ac:structured-macro>', '$1'
+                        $rowHeaderValue = ($processedHeaderContent -replace '<.*?>', '').Trim()
+
+                        $rowData[$RowHeaderColumnName] = $rowHeaderValue
+                        $dataCellsHtml = $rowHtml.Substring($firstCellMatch.Index + $firstCellMatch.Length) # Get rest of row
+                    } else { Write-Verbose "Row $rowCount`: No row header (<th>) found as first element." }
                 }
 
-                # --- Confluence Macro Parsing ---
-                # Apply replacements sequentially. Order might matter in complex cases.
-                # 1. Jira Macro (extract key)
-                $processedCellContent = $processedCellContent -replace '(?si)<ac:structured-macro\s+(?:[^>]*?\s+)?ac:name\s*=\s*"jira"(?:\s+[^>]*?)?>.*?<ac:parameter\s+(?:[^>]*?\s+)?ac:name\s*=\s*"key"(?:\s+[^>]*?)?>(.*?)</ac:parameter>.*?</ac:structured-macro>', '$1'
-                # 2. User Link (extract display name)
-                $processedCellContent = $processedCellContent -replace '(?si)<ac:userlink.*?>\s*(.*?)\s*</ac:userlink>', '$1'
-                # 3. Confluence Link (extract CDATA body)
-                $processedCellContent = $processedCellContent -replace '(?si)<ac:link.*?>.*?<ac:plain-text-link-body>\s*<!\[CDATA\[(.*?)]]>\s*</ac:plain-text-link-body>.*?</ac:link>', '$1'
-                # 4. Standard Link (extract display text)
-                $processedCellContent = $processedCellContent -replace '(?si)<a\s+[^>]*?href\s*=\s*".*?".*?>\s*(.*?)\s*</a>', '$1'
+                # --- Process Data Cells (<td>) ---
+                $cellMatches = [regex]::Matches($dataCellsHtml, '(?si)<td.*?>(.*?)</td>')
+                $cellCount = $cellMatches.Count
+                Write-Verbose "Row $rowCount`: Found $cellCount data cell(s) (<td>)."
 
-                # --- Final Cleanup ---
-                # Strip remaining simple HTML tags (like <b>, <i>, <span> etc.) and trim
-                $finalCellContent = ($processedCellContent -replace '<.*?>', '').Trim()
+                if ($columnHeaders.Count -gt 0 -and $cellCount -ne $columnHeaders.Count) { Write-Warning "Row $rowCount`: Data cell count ($cellCount) != column header count ($($columnHeaders.Count)). Misalignment likely." }
 
-                $rowData[$headerName] = $finalCellContent
-                $cellIndex++
-            }
+                $cellIndex = 0
+                foreach ($cellMatch in $cellMatches) {
+                    $headerName = if ($cellIndex -lt $columnHeaders.Count) { $columnHeaders[$cellIndex] } else { "DataColumn$($cellIndex + 1)" }
+                    $rawCellContent = $cellMatch.Groups[1].Value
+                    $processedCellContent = $rawCellContent # Start with raw
 
-            # Pad missing DATA cells based on COLUMN headers
-            if ($columnHeaders.Count -gt 0 -and $cellCount -lt $columnHeaders.Count) {
-                for ($i = $cellCount; $i -lt $columnHeaders.Count; $i++) {
-                    $headerName = $columnHeaders[$i]; $rowData[$headerName] = $null; Write-Verbose "Row $rowCount`: Padding missing value for column header '$headerName'."
+                    # Decode Entities FIRST - critical for accurate macro parsing
+                    if ($DecodeHtmlEntities) {
+                        try { $processedCellContent = [System.Net.WebUtility]::HtmlDecode($processedCellContent) }
+                        catch { Write-Warning "Row $rowCount, Cell $($cellIndex + 1): Error decoding HTML entity: $($_.Exception.Message)." }
+                    }
+
+                    # --- Confluence Macro Parsing ---
+                    # Apply replacements sequentially. Order might matter in complex cases.
+                    # 1. Jira Macro (extract key)
+                    $processedCellContent = $processedCellContent -replace '(?si)<ac:structured-macro\s+(?:[^>]*?\s+)?ac:name\s*=\s*"jira"(?:\s+[^>]*?)?>.*?<ac:parameter\s+(?:[^>]*?\s+)?ac:name\s*=\s*"key"(?:\s+[^>]*?)?>(.*?)</ac:parameter>.*?</ac:structured-macro>', '$1'
+                    # 2. User Link (extract display name)
+                    $processedCellContent = $processedCellContent -replace '(?si)<ac:userlink.*?>\s*(.*?)\s*</ac:userlink>', '$1'
+                    # 3. Confluence Link (extract CDATA body)
+                    $processedCellContent = $processedCellContent -replace '(?si)<ac:link.*?>.*?<ac:plain-text-link-body>\s*<!\[CDATA\[(.*?)]]>\s*</ac:plain-text-link-body>.*?</ac:link>', '$1'
+                    # 4. Standard Link (extract display text)
+                    $processedCellContent = $processedCellContent -replace '(?si)<a\s+[^>]*?href\s*=\s*".*?".*?>\s*(.*?)\s*</a>', '$1'
+
+                    # --- Final Cleanup ---
+                    # Strip remaining simple HTML tags (like <b>, <i>, <span> etc.) and trim
+                    $finalCellContent = ($processedCellContent -replace '<.*?>', '').Trim()
+
+                    $rowData[$headerName] = $finalCellContent
+                    $cellIndex++
                 }
+
+                # Pad missing DATA cells based on COLUMN headers
+                if ($columnHeaders.Count -gt 0 -and $cellCount -lt $columnHeaders.Count) {
+                    for ($i = $cellCount; $i -lt $columnHeaders.Count; $i++) {
+                        $headerName = $columnHeaders[$i]; $rowData[$headerName] = $null; Write-Verbose "Row $rowCount`: Padding missing value for column header '$headerName'."
+                    }
+                }
+
+                # Convert to PSCustomObject
+                if ($rowData.Count -gt 0) { $outputObjects.Add([PSCustomObject]$rowData) }
+                else { Write-Verbose "Row $rowCount resulted in empty data object, skipping." }
             }
 
-            # Convert to PSCustomObject
-            if ($rowData.Count -gt 0) { $outputObjects.Add([PSCustomObject]$rowData) }
-            else { Write-Verbose "Row $rowCount resulted in empty data object, skipping." }
+            Write-Verbose "[$((Get-Date).TimeOfDay)] End block finished. Extracted $($outputObjects.Count) rows."
+            return $outputObjects
         }
-
-        Write-Verbose "[$((Get-Date).TimeOfDay)] End block finished. Extracted $($outputObjects.Count) rows."
-        return $outputObjects
+        catch {
+            $telemetryFailed = $true
+            Invoke-TelemetryCollection @TelemetryArgs -Stage End -Failed $true -Exception $_
+            throw
+        }
+        finally {
+            if (-not $telemetryFailed) {
+                Invoke-TelemetryCollection @TelemetryArgs -Stage End
+            }
+        }
     } # End End block
 } # End Function

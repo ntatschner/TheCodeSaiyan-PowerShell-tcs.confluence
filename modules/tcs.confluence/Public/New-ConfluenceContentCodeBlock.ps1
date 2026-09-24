@@ -54,18 +54,38 @@ function New-ConfluenceContentCodeBlock {
         [bool]$Collapse = $false
     )
 
-    $LineNumbersValue = if ($LineNumbers) { 'true' } else { 'false' }
-    $CollapseValue = if ($Collapse) { 'true' } else { 'false' }
-    # "]]>" would end the CDATA section; split it across two sections
-    $SafeContent = $Content.Replace(']]>', ']]]]><![CDATA[>')
+    $TelemetryArgs = @{
+        ModuleName    = $MyInvocation.MyCommand.Module.Name
+        ModuleVersion = [string]$MyInvocation.MyCommand.Module.Version
+        CommandName   = $MyInvocation.MyCommand.Name
+        ExecutionID   = [guid]::NewGuid().ToString()
+    }
+    Invoke-TelemetryCollection @TelemetryArgs -Stage Start -ClearTimer
+    $telemetryFailed = $false
+    try {
+        $LineNumbersValue = if ($LineNumbers) { 'true' } else { 'false' }
+        $CollapseValue = if ($Collapse) { 'true' } else { 'false' }
+        # "]]>" would end the CDATA section; split it across two sections
+        $SafeContent = $Content.Replace(']]>', ']]]]><![CDATA[>')
 
-    $CodeBlockHtml = "<ac:structured-macro ac:name='code'>"
-    $CodeBlockHtml += "<ac:parameter ac:name='theme'>$Theme</ac:parameter>"
-    $CodeBlockHtml += "<ac:parameter ac:name='linenumbers'>$LineNumbersValue</ac:parameter>"
-    $CodeBlockHtml += "<ac:parameter ac:name='collapse'>$CollapseValue</ac:parameter>"
-    $CodeBlockHtml += "<ac:parameter ac:name='language'>$([System.Net.WebUtility]::HtmlEncode($Language))</ac:parameter>"
-    $CodeBlockHtml += "<ac:plain-text-body><![CDATA[$SafeContent]]></ac:plain-text-body>"
-    $CodeBlockHtml += '</ac:structured-macro>'
+        $CodeBlockHtml = "<ac:structured-macro ac:name='code'>"
+        $CodeBlockHtml += "<ac:parameter ac:name='theme'>$Theme</ac:parameter>"
+        $CodeBlockHtml += "<ac:parameter ac:name='linenumbers'>$LineNumbersValue</ac:parameter>"
+        $CodeBlockHtml += "<ac:parameter ac:name='collapse'>$CollapseValue</ac:parameter>"
+        $CodeBlockHtml += "<ac:parameter ac:name='language'>$([System.Net.WebUtility]::HtmlEncode($Language))</ac:parameter>"
+        $CodeBlockHtml += "<ac:plain-text-body><![CDATA[$SafeContent]]></ac:plain-text-body>"
+        $CodeBlockHtml += '</ac:structured-macro>'
 
-    return $CodeBlockHtml
+        return $CodeBlockHtml
+    }
+    catch {
+        $telemetryFailed = $true
+        Invoke-TelemetryCollection @TelemetryArgs -Stage End -Failed $true -Exception $_
+        throw
+    }
+    finally {
+        if (-not $telemetryFailed) {
+            Invoke-TelemetryCollection @TelemetryArgs -Stage End
+        }
+    }
 }

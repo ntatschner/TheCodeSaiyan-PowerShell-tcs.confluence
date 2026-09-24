@@ -112,87 +112,107 @@ function New-ConfluenceContentTable {
         [string]$FirstCellAlignmentFormatting
     )
 
-    if ($null -eq $TableData -or $TableData.Count -eq 0) {
-        return ''
+    $TelemetryArgs = @{
+        ModuleName    = $MyInvocation.MyCommand.Module.Name
+        ModuleVersion = [string]$MyInvocation.MyCommand.Module.Version
+        CommandName   = $MyInvocation.MyCommand.Name
+        ExecutionID   = [guid]::NewGuid().ToString()
     }
-
-    $firstRow = $TableData[0]
-    $firstRowType = $firstRow.GetType()
-    $firstRowProperties = @($firstRow.PSObject.Properties.Name)
-    foreach ($row in $TableData) {
-        if ($null -eq $row -or $row.GetType() -ne $firstRowType) {
-            Write-Error 'All table rows must be of the same type.'
-            return
+    Invoke-TelemetryCollection @TelemetryArgs -Stage Start -ClearTimer
+    $telemetryFailed = $false
+    try {
+        if ($null -eq $TableData -or $TableData.Count -eq 0) {
+            return ''
         }
-        if (Compare-Object -ReferenceObject $firstRowProperties -DifferenceObject @($row.PSObject.Properties.Name) -SyncWindow 0) {
-            Write-Error 'All table rows must have the same column names.'
-            return
-        }
-    }
-    if ([string]::IsNullOrEmpty($FirstCellAlignmentFormatting)) {
-        $FirstCellAlignmentFormatting = $CellAlignmentFormatting
-    }
 
-    $URLFormatting = '\b((http|https):\/\/)?((www\.)?([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,})(\/[a-zA-Z0-9-._~:\/?#[\]@!$&''()*+,;=]*)?\b'
-
-    # Renders one cell value: nested table for collections/complex objects, links for URLs
-    $renderValue = {
-        param($Value, [bool]$DetectLinks)
-        if ($null -eq $Value) { return '' }
-        $isScalar = ($Value -is [string]) -or ($Value -is [ValueType])
-        if (-not $isScalar) {
-            if ($Value -is [System.Collections.IEnumerable] -and @($Value).Count -ge 1) {
-                return (New-ConfluenceContentTable -TableData @($Value))
+        $firstRow = $TableData[0]
+        $firstRowType = $firstRow.GetType()
+        $firstRowProperties = @($firstRow.PSObject.Properties.Name)
+        foreach ($row in $TableData) {
+            if ($null -eq $row -or $row.GetType() -ne $firstRowType) {
+                Write-Error 'All table rows must be of the same type.'
+                return
             }
-            if (@($Value.PSObject.Properties).Count -gt 1) {
-                return (New-ConfluenceContentTable -TableData @($Value))
+            if (Compare-Object -ReferenceObject $firstRowProperties -DifferenceObject @($row.PSObject.Properties.Name) -SyncWindow 0) {
+                Write-Error 'All table rows must have the same column names.'
+                return
             }
         }
-        $text = $Value.ToString()
-        if ($DetectLinks -and [regex]::IsMatch($text, $URLFormatting)) {
-            return (New-ConfluenceContentLink -TextBlock $text)
+        if ([string]::IsNullOrEmpty($FirstCellAlignmentFormatting)) {
+            $FirstCellAlignmentFormatting = $CellAlignmentFormatting
         }
-        return $text
-    }
 
-    $TableHtml = "<table class='$TableType' style='$TableTypeStyle'>"
-    if (-not $NoHeader) {
-        $headerOpen = Get-HtmlFormatTag -Format $HeaderStringFormatting
-        $headerClose = Get-HtmlFormatTag -Format $HeaderStringFormatting -Close
-        $TableHtml += '<thead><tr>'
-        foreach ($header in $firstRowProperties) {
-            $TableHtml += "<th style='text-align: $HeaderAlignmentFormatting;' scope='col'>$headerOpen$header$headerClose</th>"
-        }
-        $TableHtml += '</tr></thead>'
-    }
+        $URLFormatting = '\b((http|https):\/\/)?((www\.)?([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,})(\/[a-zA-Z0-9-._~:\/?#[\]@!$&''()*+,;=]*)?\b'
 
-    $firstOpen = Get-HtmlFormatTag -Format $FirstCellStringFormatting
-    $firstClose = Get-HtmlFormatTag -Format $FirstCellStringFormatting -Close
-    $cellOpen = Get-HtmlFormatTag -Format $CellStringFormatting
-    $cellClose = Get-HtmlFormatTag -Format $CellStringFormatting -Close
-    $useHeading = $FirstCellHeaderFormat -match '^[1-6]$'
-
-    $TableHtml += '<tbody>'
-    foreach ($row in $TableData) {
-        $TableHtml += '<tr>'
-        $isFirstCell = $true
-        foreach ($cell in $row.PSObject.Properties) {
-            if ($isFirstCell) {
-                $cellTag = if ($VerticalHeader) { 'th' } else { 'td' }
-                $scope = if ($VerticalHeader) { " scope='row'" } else { '' }
-                $wrapOpen = if ($useHeading) { "<h$FirstCellHeaderFormat>" } else { '<span>' }
-                $wrapClose = if ($useHeading) { "</h$FirstCellHeaderFormat>" } else { '</span>' }
-                $value = & $renderValue $cell.Value $false
-                $TableHtml += "<$cellTag$scope style='text-align: $FirstCellAlignmentFormatting;'>$wrapOpen$firstOpen$value$firstClose$wrapClose</$cellTag>"
-                $isFirstCell = $false
+        # Renders one cell value: nested table for collections/complex objects, links for URLs
+        $renderValue = {
+            param($Value, [bool]$DetectLinks)
+            if ($null -eq $Value) { return '' }
+            $isScalar = ($Value -is [string]) -or ($Value -is [ValueType])
+            if (-not $isScalar) {
+                if ($Value -is [System.Collections.IEnumerable] -and @($Value).Count -ge 1) {
+                    return (New-ConfluenceContentTable -TableData @($Value))
+                }
+                if (@($Value.PSObject.Properties).Count -gt 1) {
+                    return (New-ConfluenceContentTable -TableData @($Value))
+                }
             }
-            else {
-                $value = & $renderValue $cell.Value $true
-                $TableHtml += "<td style='text-align: $CellAlignmentFormatting;'>$cellOpen$value$cellClose</td>"
+            $text = $Value.ToString()
+            if ($DetectLinks -and [regex]::IsMatch($text, $URLFormatting)) {
+                return (New-ConfluenceContentLink -TextBlock $text)
             }
+            return $text
         }
-        $TableHtml += '</tr>'
+
+        $TableHtml = "<table class='$TableType' style='$TableTypeStyle'>"
+        if (-not $NoHeader) {
+            $headerOpen = Get-HtmlFormatTag -Format $HeaderStringFormatting
+            $headerClose = Get-HtmlFormatTag -Format $HeaderStringFormatting -Close
+            $TableHtml += '<thead><tr>'
+            foreach ($header in $firstRowProperties) {
+                $TableHtml += "<th style='text-align: $HeaderAlignmentFormatting;' scope='col'>$headerOpen$header$headerClose</th>"
+            }
+            $TableHtml += '</tr></thead>'
+        }
+
+        $firstOpen = Get-HtmlFormatTag -Format $FirstCellStringFormatting
+        $firstClose = Get-HtmlFormatTag -Format $FirstCellStringFormatting -Close
+        $cellOpen = Get-HtmlFormatTag -Format $CellStringFormatting
+        $cellClose = Get-HtmlFormatTag -Format $CellStringFormatting -Close
+        $useHeading = $FirstCellHeaderFormat -match '^[1-6]$'
+
+        $TableHtml += '<tbody>'
+        foreach ($row in $TableData) {
+            $TableHtml += '<tr>'
+            $isFirstCell = $true
+            foreach ($cell in $row.PSObject.Properties) {
+                if ($isFirstCell) {
+                    $cellTag = if ($VerticalHeader) { 'th' } else { 'td' }
+                    $scope = if ($VerticalHeader) { " scope='row'" } else { '' }
+                    $wrapOpen = if ($useHeading) { "<h$FirstCellHeaderFormat>" } else { '<span>' }
+                    $wrapClose = if ($useHeading) { "</h$FirstCellHeaderFormat>" } else { '</span>' }
+                    $value = & $renderValue $cell.Value $false
+                    $TableHtml += "<$cellTag$scope style='text-align: $FirstCellAlignmentFormatting;'>$wrapOpen$firstOpen$value$firstClose$wrapClose</$cellTag>"
+                    $isFirstCell = $false
+                }
+                else {
+                    $value = & $renderValue $cell.Value $true
+                    $TableHtml += "<td style='text-align: $CellAlignmentFormatting;'>$cellOpen$value$cellClose</td>"
+                }
+            }
+            $TableHtml += '</tr>'
+        }
+        $TableHtml += '</tbody></table>'
+        return $TableHtml
     }
-    $TableHtml += '</tbody></table>'
-    return $TableHtml
+    catch {
+        $telemetryFailed = $true
+        Invoke-TelemetryCollection @TelemetryArgs -Stage End -Failed $true -Exception $_
+        throw
+    }
+    finally {
+        if (-not $telemetryFailed) {
+            Invoke-TelemetryCollection @TelemetryArgs -Stage End
+        }
+    }
 }
