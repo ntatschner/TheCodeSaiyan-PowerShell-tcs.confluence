@@ -21,6 +21,14 @@ Describe 'New-ConfluenceContentHeader' {
             Should -BeExactly '<h3><strong><em><u>T</u></em></strong></h3>'
     }
 
+    It 'Escapes the header text' {
+        New-ConfluenceContentHeader -Header 'R&D <draft>' -Level 2 | Should -BeExactly '<h2>R&amp;D &lt;draft&gt;</h2>'
+    }
+
+    It 'Inserts markup unchanged with -Raw' {
+        New-ConfluenceContentHeader -Header '<em>x</em>' -Level 2 -Raw | Should -BeExactly '<h2><em>x</em></h2>'
+    }
+
     It 'Rejects levels outside 1-6' {
         { New-ConfluenceContentHeader -Header 'T' -Level 7 } | Should -Throw
     }
@@ -54,29 +62,49 @@ Describe 'New-ConfluenceContentCodeBlock' {
 
 Describe 'New-ConfluenceContentDivider' {
     It 'Returns <Expected> for <Type>' -ForEach @(
-        @{ Type = 'line'; Expected = '<hr>' }
-        @{ Type = 'space'; Expected = '<p>&nbsp;</p>' }
-        @{ Type = 'dashed'; Expected = "<hr class='dashed'>" }
+        @{ Type = 'line'; Expected = '<hr/>' }
+        @{ Type = 'space'; Expected = '<p>&#160;</p>' }
+        @{ Type = 'dashed'; Expected = "<hr class='dashed'/>" }
     ) {
         New-ConfluenceContentDivider -Type $Type | Should -BeExactly $Expected
     }
 
     It 'Defaults to a line' {
-        New-ConfluenceContentDivider | Should -BeExactly '<hr>'
+        New-ConfluenceContentDivider | Should -BeExactly '<hr/>'
     }
 }
 
 Describe 'New-ConfluenceContentInfo' {
-    It 'Creates a message block of the given type' {
-        $html = New-ConfluenceContentInfo -Title 'My Title' -Content 'My content' -Type warning
-        $html | Should -Match '<div class="aui-message aui-message-warning">'
-        $html | Should -Match '<span class="aui-icon icon-warning"></span>'
-        $html | Should -Match '(?s)<p class="title">.*My Title.*</p>'
-        $html | Should -Match '<p>My content</p>'
+    It 'Creates the <Type> storage-format panel macro with a rich-text body' -ForEach @(
+        @{ Type = 'info' }
+        @{ Type = 'tip' }
+        @{ Type = 'note' }
+        @{ Type = 'warning' }
+    ) {
+        New-ConfluenceContentInfo -Title 'My Title' -Content 'My content' -Type $Type |
+            Should -BeExactly "<ac:structured-macro ac:name=`"$Type`"><ac:parameter ac:name=`"title`">My Title</ac:parameter><ac:rich-text-body><p>My content</p></ac:rich-text-body></ac:structured-macro>"
     }
 
-    It 'Defaults to info' {
-        New-ConfluenceContentInfo -Title 't' -Content 'c' | Should -Match 'aui-message-info'
+    It 'Maps error to the warning macro' {
+        New-ConfluenceContentInfo -Title 't' -Content 'c' -Type error | Should -Match '^<ac:structured-macro ac:name="warning">'
+    }
+
+    It 'Defaults to info and does not emit the AUI div' {
+        $html = New-ConfluenceContentInfo -Title 't' -Content 'c'
+        $html | Should -Match 'ac:name="info"'
+        $html | Should -Not -Match 'aui-message'
+    }
+
+    It 'Escapes title and content' {
+        $html = New-ConfluenceContentInfo -Title 'A & B' -Content '<script>x</script>'
+        $html | Should -Match '>A &amp; B<'
+        $html | Should -Match '<p>&lt;script&gt;x&lt;/script&gt;</p>'
+    }
+
+    It 'Inserts nested fragments unchanged with -Raw' {
+        $code = New-ConfluenceContentCodeBlock -Content 'a & b'
+        $html = New-ConfluenceContentInfo -Title '' -Content $code -Raw
+        $html | Should -BeExactly "<ac:structured-macro ac:name=`"info`"><ac:rich-text-body>$code</ac:rich-text-body></ac:structured-macro>"
     }
 }
 
@@ -96,6 +124,16 @@ Describe 'New-ConfluenceContentLink' {
 
     It 'Leaves text without URLs unchanged' {
         New-ConfluenceContentLink -TextBlock 'no links here' | Should -BeExactly 'no links here'
+    }
+
+    It 'Escapes the URL and the link text' {
+        New-ConfluenceContentLink -Url "https://x.com/?a=1&b=it's" -LinkText 'R&D <x>' |
+            Should -BeExactly "<a href='https://x.com/?a=1&amp;b=it&#39;s'>R&amp;D &lt;x&gt;</a>"
+    }
+
+    It 'Only links addresses with a scheme and escapes the rest of the text' {
+        New-ConfluenceContentLink -TextBlock 'See report.pdf, me@contoso.com & mailto:me@contoso.com or (https://contoso.com/a?b=1&c=2).' |
+            Should -BeExactly "See report.pdf, me@contoso.com &amp; <a href='mailto:me@contoso.com'>mailto:me@contoso.com</a> or (<a href='https://contoso.com/a?b=1&amp;c=2'>https://contoso.com/a?b=1&amp;c=2</a>)."
     }
 }
 
@@ -141,8 +179,8 @@ Describe 'Join-ConfluenceContent' {
     It 'Joins blocks with <Separator>' -ForEach @(
         @{ Separator = 'HorizontalRule'; Text = '<hr />' }
         @{ Separator = 'NewLine'; Text = '<br />' }
-        @{ Separator = 'Space'; Text = '&nbsp;' }
-        @{ Separator = 'Tab'; Text = '&emsp;' }
+        @{ Separator = 'Space'; Text = '&#160;' }
+        @{ Separator = 'Tab'; Text = '&#8195;' }
     ) {
         Join-ConfluenceContent -ContentBlocks '<p>1</p>', '<p>2</p>' -Separator $Separator | Should -BeExactly "<p>1</p>$Text<p>2</p>"
     }

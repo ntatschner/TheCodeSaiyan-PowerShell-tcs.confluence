@@ -2,17 +2,20 @@ TOPIC
     about_tcs.confluence
 
 SHORT DESCRIPTION
-    Work with Confluence Cloud pages and spaces, and build Confluence page content.
+    Work with Confluence Cloud pages, spaces, labels and attachments, and build
+    Confluence page content.
 
 LONG DESCRIPTION
     tcs.confluence is part of the TheCodeSaiyan PowerShell suite and needs
     tcs.core 0.3.0 or later. It has two groups of commands:
 
     - REST commands that read, create, update and delete Confluence Cloud
-      pages and read spaces. They use the site and credential set with
-      Set-ConfluenceContext for the current session.
+      pages, search with CQL, read spaces and manage labels and attachments.
+      They use the site and credential set with Set-ConfluenceContext for the
+      current session. Page commands write page objects to the pipeline.
     - Content builders that return Confluence storage-format (XHTML) text for
-      page bodies. They need no connection.
+      page bodies. They need no connection. Text is escaped so the output is
+      always well-formed; -Raw inserts storage-format fragments unchanged.
 
     Set-ConfluenceContext keeps the credential in memory only, as a
     PSCredential. It is never written to disk, never returned by
@@ -28,48 +31,63 @@ COMMANDS
                                         used by the other commands.
         Get-ConfluenceContext           Returns the current connection, without
                                         the credential.
+        Clear-ConfluenceContext         Forgets the connection and credential.
         Invoke-ConfluenceRequest        Sends a request to the Confluence REST
                                         API (endpoint building, CQL search,
-                                        spaceKey resolution and pagination).
+                                        cached space key resolution, 429 retry
+                                        and pagination).
 
     Pages and spaces
         Get-ConfluencePage              Gets pages by ID, by space or by title.
         Get-ConfluencePageContent       Gets pages including their body in the
                                         requested format.
+        Get-ConfluencePageChild         Gets the child pages of a page, or all
+                                        descendants with -Recurse.
+        Search-ConfluenceContent        Searches with a CQL query.
         Get-ConfluenceSpace             Gets spaces, optionally filtered by name
                                         (alias Get-ConfluenceSpaces).
         New-ConfluencePage              Creates a page, or with -Force updates
                                         the page with the same title.
         Update-ConfluencePage           Replaces the title and body of a page.
-        Remove-ConfluencePage           Deletes a page.
+        Remove-ConfluencePage           Deletes a page (-Purge deletes it
+                                        permanently).
         Remove-DuplicateConfluencePage  Removes duplicate pages that share a
                                         title and parent, keeping one (alias
                                         Remove-DuplicateConfluencePages).
 
+    Labels and attachments
+        Get-ConfluencePageLabel         Gets the labels of a page.
+        Add-ConfluencePageLabel         Adds labels to a page.
+        Remove-ConfluencePageLabel      Removes labels from a page.
+        Get-ConfluenceAttachment        Gets the attachments of a page.
+        Add-ConfluenceAttachment        Uploads files to a page.
+
     Content builders
         New-ConfluenceContentHeader     Creates a heading (h1 to h6).
-        New-ConfluenceContentTable      Creates a table from a collection of
-                                        objects.
-        New-HtmlTable                   Creates an HTML table, or merges data
-                                        into an existing HTML table.
-        Get-HtmlTableRowData            Extracts the rows of an HTML table into
-                                        objects.
+        New-ConfluenceContentTable      Creates a table from objects, hashtables
+                                        or ordered dictionaries.
         New-ConfluenceContentCodeBlock  Creates a code block macro.
         New-ConfluenceContentTOC        Creates a table of contents macro.
-        New-ConfluenceContentInfo       Creates an info, tip, note, warning or
-                                        error message block.
-        New-ConfluenceContentLink       Creates a hyperlink, or turns every URL
-                                        in a block of text into a hyperlink.
+        New-ConfluenceContentInfo       Creates an info, tip, note or warning
+                                        panel macro.
+        New-ConfluenceContentStatus     Creates a status lozenge macro.
+        New-ConfluenceContentExpand     Creates an expand (collapsible) macro.
+        New-ConfluenceContentJiraIssue  Creates a Jira issue or JQL macro.
+        New-ConfluenceContentLink       Creates a hyperlink, or turns every
+                                        http, https or mailto address in a block
+                                        of text into a hyperlink.
         New-ConfluenceContentInternalLink
-                                        Creates a link to a Confluence page,
-                                        optionally to a heading on that page.
+                                        Creates a storage-format link to a
+                                        Confluence page, optionally to a heading
+                                        on that page.
         New-ConfluenceContentDivider    Creates a horizontal rule or a blank
                                         paragraph.
-        New-ConfluencePageLayout        Creates a page layout section with one
-                                        to three columns.
+        New-ConfluencePageLayout        Creates a page layout with one or more
+                                        sections of one to three columns.
         Join-ConfluenceContent          Joins blocks of content with a
                                         separator.
-        ConvertTo-ConfluenceHTML        Converts simple Markdown to HTML.
+        ConvertTo-ConfluenceHTML        Converts simple Markdown to storage
+                                        format.
 
     Every command has full help, for example: Get-Help New-ConfluencePage -Full
 
@@ -122,11 +140,15 @@ EXAMPLES
             New-ConfluenceContentHeader -Header 'Services' -Level 2
             New-ConfluenceContentCodeBlock -Content 'Get-Service' -Language powershell
         )
-        New-ConfluencePage -SpaceKey 123456 -ParentId 654321 -Title 'Service report' -Status current -Content $body -Force
+        New-ConfluencePage -SpaceId ENG -ParentId 654321 -Title 'Service report' -Status current -Content $body -Force
 
-    Find pages by title with a wildcard:
+    Find pages by title with a wildcard, reading every result page:
 
-        (Get-ConfluencePage -SpaceKey ENG -Search 'Service*').Results | Select-Object id, title
+        Get-ConfluencePage -SpaceKey ENG -Search 'Service*' -All | Select-Object id, title
+
+    Search with CQL:
+
+        Search-ConfluenceContent -Cql 'type = page AND label = runbook'
 
     Turn off update warnings for tcs.confluence:
 

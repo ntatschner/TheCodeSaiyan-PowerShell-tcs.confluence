@@ -12,7 +12,8 @@ function Set-ConfluenceContext {
         It is never written to disk, never returned by Get-ConfluenceContext and never written to the
         verbose, warning or error streams. The Authorization header is built for each request.
 
-        Use Get-ConfluenceContext to see the current connection details.
+        Use Get-ConfluenceContext to see the current connection details and Clear-ConfluenceContext to
+        forget them. Setting a context also clears the cached space key to space ID lookups.
 
     .PARAMETER ConfluenceUrl
         The base URL of the Confluence site, for example https://contoso.atlassian.net. Only https URLs
@@ -30,7 +31,9 @@ function Set-ConfluenceContext {
         token, for example from Get-Credential or a secret store.
 
     .PARAMETER ApiVersion
-        The default REST API version for the derived ConnectionURI: v2 (default) or v1.
+        The default REST API version: v2 (default) or v1. It sets the derived ConnectionURI and the
+        version Invoke-ConfluenceRequest -Resource uses when the call does not pass -ApiVersion. The
+        page, space, label and attachment commands always use the API version they are written for.
 
     .EXAMPLE
         Set-ConfluenceContext -ConfluenceUrl 'https://contoso.atlassian.net' -Credential (Get-Credential)
@@ -99,6 +102,7 @@ function Set-ConfluenceContext {
         }
 
         $script:ConfluenceCredential = $Credential
+        $script:ConfluenceSpaceIdCache = $null
         $script:ConfluenceContext = [pscustomobject]@{
             OriginalConnectionURL = $raw
             ConnectionBaseURL     = $normalized

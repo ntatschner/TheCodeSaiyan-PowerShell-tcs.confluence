@@ -5,8 +5,12 @@ function New-ConfluenceContentLink {
 
     .DESCRIPTION
         With -Url, New-ConfluenceContentLink returns an <a> element that shows -LinkText (or the URL
-        when no text is given). With -TextBlock, every web address found in the text is replaced by a
-        link to itself.
+        when no text is given). With -TextBlock, every address with a scheme (http://, https:// or
+        mailto:) found in the text is replaced by a link to itself; file names such as report.pdf and
+        bare e-mail addresses are left as text.
+
+        The URL, the link text and the text block are escaped (& < > and quotes), so the result is
+        always well-formed storage format.
 
     .PARAMETER LinkText
         The text shown for the link. Defaults to the URL.
@@ -15,7 +19,7 @@ function New-ConfluenceContentLink {
         The address to link to.
 
     .PARAMETER TextBlock
-        Text in which every URL is converted to a link.
+        Text in which every http, https or mailto address is converted to a link.
 
     .EXAMPLE
         New-ConfluenceContentLink -Url 'https://example.com' -LinkText 'Example'
@@ -55,17 +59,11 @@ function New-ConfluenceContentLink {
     $telemetryFailed = $false
     try {
         if ($PSCmdlet.ParameterSetName -eq 'TextBlock') {
-            $Pattern = '\b((http|https):\/\/)?((www\.)?([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,})(\/[a-zA-Z0-9-._~:\/?#[\]@!$&''()*+,;=]*)?\b'
-            # A MatchEvaluator works on Windows PowerShell 5.1, where -replace does not accept a script block
-            $evaluator = [System.Text.RegularExpressions.MatchEvaluator] {
-                param($Match)
-                "<a href='$($Match.Value)'>$($Match.Value)</a>"
-            }
-            return [regex]::Replace($TextBlock, $Pattern, $evaluator)
+            return (ConvertTo-ConfluenceLinkedText -Text $TextBlock)
         }
 
         if (-not $LinkText) { $LinkText = $Url }
-        return "<a href='$Url'>$LinkText</a>"
+        return ("<a href='{0}'>{1}</a>" -f (ConvertTo-ConfluenceXmlText -Text $Url -Attribute), (ConvertTo-ConfluenceXmlText -Text $LinkText))
     }
     catch {
         $telemetryFailed = $true

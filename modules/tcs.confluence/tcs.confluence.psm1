@@ -21,6 +21,10 @@ foreach ($File in @($ClassFiles + $Private + $Public)) {
 # and is never returned by Get-ConfluenceContext or written to any output stream.
 $script:ConfluenceContext = $null
 $script:ConfluenceCredential = $null
+# Space key -> space ID lookups, cleared whenever the context changes
+$script:ConfluenceSpaceIdCache = $null
+# Nesting depth of New-ConfluenceContentTable while it renders nested tables
+$script:ConfluenceTableNesting = 0
 #endregion
 
 #region module config, load telemetry and update check (never blocks import)

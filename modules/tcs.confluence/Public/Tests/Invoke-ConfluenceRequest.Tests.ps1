@@ -57,17 +57,35 @@ Describe 'Invoke-ConfluenceRequest' {
             Should -Invoke -ModuleName tcs.confluence Invoke-WebRequest -Times 1 -Exactly -ParameterFilter { $Uri.OriginalString -eq $Expected }
         }
 
-        It 'Switches a wildcard title search to the v1 CQL search' {
+        It 'Sends a wildcard page title search to the documented CQL endpoint content/search' {
             $null = Invoke-ConfluenceRequest -Method GET -Resource pages -Search 'Test*'
             Should -Invoke -ModuleName tcs.confluence Invoke-WebRequest -Times 1 -Exactly -ParameterFilter {
-                (Get-DecodedUri $Uri) -eq 'https://contoso.atlassian.net/wiki/rest/api/content?cql=title ~ "Test*"'
+                (Get-DecodedUri $Uri) -eq 'https://contoso.atlassian.net/wiki/rest/api/content/search?cql=type = page AND title ~ "Test*"'
             }
         }
 
-        It 'Uses an exact CQL match without wildcards and escapes quotes' {
+        It 'Sends a search on /content to content/search with an exact CQL match and escapes quotes' {
             $null = Invoke-ConfluenceRequest -Method GET -URIPath '/wiki/rest/api/content' -Search 'Say "hi"'
             Should -Invoke -ModuleName tcs.confluence Invoke-WebRequest -Times 1 -Exactly -ParameterFilter {
-                (Get-DecodedUri $Uri) -eq 'https://contoso.atlassian.net/wiki/rest/api/content?cql=title = "Say \"hi\""'
+                (Get-DecodedUri $Uri) -eq 'https://contoso.atlassian.net/wiki/rest/api/content/search?cql=title = "Say \"hi\""'
+            }
+        }
+
+        It 'Escapes a backslash before the quote so a title cannot break out of the CQL string' {
+            $null = Invoke-ConfluenceRequest -Method GET -Resource pages -Search 'a\" OR space = "X*'
+            Should -Invoke -ModuleName tcs.confluence Invoke-WebRequest -Times 1 -Exactly -ParameterFilter {
+                (Get-DecodedUri $Uri) -eq 'https://contoso.atlassian.net/wiki/rest/api/content/search?cql=type = page AND title ~ "a\\\" OR space = \"X*"'
+            }
+        }
+
+        It 'Adds the space to the CQL query of a search (<Space>)' -ForEach @(
+            @{ Space = 'DOCS'; Clause = 'space = "DOCS"' }
+            @{ Space = '42'; Clause = 'space.id = 42' }
+        ) {
+            $null = Invoke-ConfluenceRequest -Method GET -Resource pages -Search 'Run*' -Query @{ spaceKey = $Space }
+            Should -Invoke -ModuleName tcs.confluence Invoke-WebRequest -Times 1 -Exactly
+            Should -Invoke -ModuleName tcs.confluence Invoke-WebRequest -Times 1 -Exactly -ParameterFilter {
+                (Get-DecodedUri $Uri) -eq "https://contoso.atlassian.net/wiki/rest/api/content/search?cql=type = page AND $Clause AND title ~ `"Run*`""
             }
         }
 
@@ -86,20 +104,99 @@ Describe 'Invoke-ConfluenceRequest' {
     }
 
     Context 'spaceKey handling for v2 pages' {
-        It 'Uses a numeric spaceKey as spaceId without a lookup' {
-            $null = Invoke-ConfluenceRequest -Method GET -Resource pages -Query @{ spaceKey = '12345' }
-            Should -Invoke -ModuleName tcs.confluence Invoke-WebRequest -Times 1 -Exactly
-            Should -Invoke -ModuleName tcs.confluence Invoke-WebRequest -Times 1 -Exactly -ParameterFilter { $Uri.OriginalString -like '*spaceId=12345*' }
+        BeforeEach {
+            InModuleScope tcs.confluence { $script:ConfluenceSpaceIdCache = $null }
         }
 
-        It 'Resolves a space key to its id' {
+        It 'Sends a numeric spaceKey as the documented space-id parameter without a lookup' {
+            $null = Invoke-ConfluenceRequest -Method GET -Resource pages -Query @{ spaceKey = '12345' }
+            Should -Invoke -ModuleName tcs.confluence Invoke-WebRequest -Times 1 -Exactly
+            Should -Invoke -ModuleName tcs.confluence Invoke-WebRequest -Times 1 -Exactly -ParameterFilter { $Uri.OriginalString -eq 'https://contoso.atlassian.net/wiki/api/v2/pages?space-id=12345' }
+        }
+
+        It 'Sends spaceId as space-id' {
+            $null = Invoke-ConfluenceRequest -Method GET -Resource pages -Query @{ spaceId = '7' }
+            Should -Invoke -ModuleName tcs.confluence Invoke-WebRequest -Times 1 -Exactly -ParameterFilter { $Uri.OriginalString -eq 'https://contoso.atlassian.net/wiki/api/v2/pages?space-id=7' }
+        }
+
+        It 'Resolves a space key to its id once and caches it' {
             Mock -ModuleName tcs.confluence Invoke-WebRequest -ParameterFilter { $Uri.OriginalString -like '*/spaces?keys=DOCS*' } {
                 [pscustomobject]@{ StatusCode = 200; StatusDescription = 'OK'; Content = '{"results":[{"id":"98765","key":"DOCS"}]}' }
             }
             $query = @{ spaceKey = 'DOCS' }
             $null = Invoke-ConfluenceRequest -Method GET -Resource pages -Query $query
-            Should -Invoke -ModuleName tcs.confluence Invoke-WebRequest -Times 1 -Exactly -ParameterFilter { $Uri.OriginalString -like '*/pages?spaceId=98765' }
+            $null = Invoke-ConfluenceRequest -Method GET -Resource pages -Query $query
+            Should -Invoke -ModuleName tcs.confluence Invoke-WebRequest -Times 2 -Exactly -ParameterFilter { $Uri.OriginalString -eq 'https://contoso.atlassian.net/wiki/api/v2/pages?space-id=98765' }
+            Should -Invoke -ModuleName tcs.confluence Invoke-WebRequest -Times 1 -Exactly -ParameterFilter { $Uri.OriginalString -like '*/spaces?keys=DOCS*' }
             $query.ContainsKey('spaceKey') | Should -BeTrue -Because 'the caller''s hashtable must not be changed'
+        }
+
+        It 'Reports an unknown space key and does not send an unfiltered request' {
+            Mock -ModuleName tcs.confluence Invoke-WebRequest -ParameterFilter { $Uri.OriginalString -like '*/spaces?keys=*' } {
+                [pscustomobject]@{ StatusCode = 200; StatusDescription = 'OK'; Content = '{"results":[]}' }
+            }
+            { Invoke-ConfluenceRequest -Method GET -Resource pages -Query @{ spaceKey = 'NOPE' } -ErrorAction Stop } | Should -Throw -ExpectedMessage '*NOPE*'
+            Should -Invoke -ModuleName tcs.confluence Invoke-WebRequest -Times 0 -Exactly -ParameterFilter { $Uri.OriginalString -like '*/pages*' }
+        }
+
+        It 'Clears the cache when the context is set again' {
+            InModuleScope tcs.confluence { $script:ConfluenceSpaceIdCache = New-Object -TypeName 'System.Collections.Generic.Dictionary[string,string]'; $script:ConfluenceSpaceIdCache['X'] = '1' }
+            Set-ConfluenceContext -ConfluenceUrl 'https://contoso.atlassian.net' -Username 'user@contoso.com' -PersonalAccessToken 'secret-token-value'
+            InModuleScope tcs.confluence { $script:ConfluenceSpaceIdCache } | Should -BeNullOrEmpty
+        }
+    }
+
+    Context 'API version from the context' {
+        AfterEach {
+            Set-ConfluenceContext -ConfluenceUrl 'https://contoso.atlassian.net' -Username 'user@contoso.com' -PersonalAccessToken 'secret-token-value'
+        }
+
+        It 'Uses the v1 API for -Resource when the context was set with -ApiVersion v1' {
+            Set-ConfluenceContext -ConfluenceUrl 'https://contoso.atlassian.net' -Username 'user@contoso.com' -PersonalAccessToken 'secret-token-value' -ApiVersion v1
+            $null = Invoke-ConfluenceRequest -Method GET -Resource pages
+            Should -Invoke -ModuleName tcs.confluence Invoke-WebRequest -Times 1 -Exactly -ParameterFilter { $Uri.OriginalString -eq 'https://contoso.atlassian.net/wiki/rest/api/content' }
+        }
+
+        It 'Lets -ApiVersion override the context' {
+            Set-ConfluenceContext -ConfluenceUrl 'https://contoso.atlassian.net' -Username 'user@contoso.com' -PersonalAccessToken 'secret-token-value' -ApiVersion v1
+            $null = Invoke-ConfluenceRequest -Method GET -Resource pages -ApiVersion 2
+            Should -Invoke -ModuleName tcs.confluence Invoke-WebRequest -Times 1 -Exactly -ParameterFilter { $Uri.OriginalString -eq 'https://contoso.atlassian.net/wiki/api/v2/pages' }
+        }
+
+        It 'Keeps Get-ConfluencePage on the v2 API it is written for' {
+            Set-ConfluenceContext -ConfluenceUrl 'https://contoso.atlassian.net' -Username 'user@contoso.com' -PersonalAccessToken 'secret-token-value' -ApiVersion v1
+            $null = Get-ConfluencePage -PageId 5
+            Should -Invoke -ModuleName tcs.confluence Invoke-WebRequest -Times 1 -Exactly -ParameterFilter { $Uri.OriginalString -eq 'https://contoso.atlassian.net/wiki/api/v2/pages/5' }
+        }
+    }
+
+    Context 'Rate limiting' {
+        BeforeEach {
+            Mock -ModuleName tcs.confluence Start-Sleep { }
+        }
+
+        It 'Retries a 429 response after the Retry-After delay' {
+            $script:calls = 0
+            Mock -ModuleName tcs.confluence Invoke-WebRequest {
+                $script:calls++
+                if ($script:calls -eq 1) {
+                    return [pscustomobject]@{ StatusCode = 429; StatusDescription = 'Too Many Requests'; Content = ''; Headers = @{ 'Retry-After' = @('3') } }
+                }
+                [pscustomobject]@{ StatusCode = 200; StatusDescription = 'OK'; Content = '{"results":[{"id":"1"}]}' }
+            }
+            $result = Invoke-ConfluenceRequest -Method GET -Resource pages -ErrorAction Stop
+            @($result.Results).Count | Should -Be 1
+            Should -Invoke -ModuleName tcs.confluence Invoke-WebRequest -Times 2 -Exactly
+            Should -Invoke -ModuleName tcs.confluence Start-Sleep -Times 1 -Exactly -ParameterFilter { $Milliseconds -eq 3000 }
+        }
+
+        It 'Gives up after four retries and reports the 429' {
+            Mock -ModuleName tcs.confluence Invoke-WebRequest {
+                [pscustomobject]@{ StatusCode = 429; StatusDescription = 'Too Many Requests'; Content = '' }
+            }
+            { Invoke-ConfluenceRequest -Method GET -Resource pages -ErrorAction Stop } | Should -Throw -ExpectedMessage '*429*'
+            Should -Invoke -ModuleName tcs.confluence Invoke-WebRequest -Times 5 -Exactly
+            Should -Invoke -ModuleName tcs.confluence Start-Sleep -Times 4 -Exactly
         }
     }
 
@@ -183,17 +280,28 @@ Describe 'Invoke-ConfluenceRequest' {
             Should -Invoke -ModuleName tcs.confluence Invoke-WebRequest -Times 1 -Exactly -ParameterFilter { $Uri.OriginalString -eq 'https://contoso.atlassian.net/wiki/api/v2/pages?cursor=abc' }
         }
 
-        It 'Stops at -MaxQueryPages' {
-            $result = Invoke-ConfluenceRequest -Method GET -Resource pages -MaxQueryPages 2
+        It 'Stops at -MaxQueryPages and warns that more results exist' {
+            $result = Invoke-ConfluenceRequest -Method GET -Resource pages -MaxQueryPages 2 -WarningAction SilentlyContinue -WarningVariable pageWarning
             @($result.Results).Count | Should -Be 2
             Should -Invoke -ModuleName tcs.confluence Invoke-WebRequest -Times 2 -Exactly
+            "$pageWarning" | Should -BeLike '*more results*-All*'
+        }
+
+        It 'Does not warn when the last page was reached' {
+            $null = Invoke-ConfluenceRequest -Method GET -Resource pages -MaxQueryPages 3 -WarningVariable pageWarning
+            $pageWarning | Should -BeNullOrEmpty
+        }
+
+        It 'Reads every page with -All' {
+            $result = Invoke-ConfluenceRequest -Method GET -Resource pages -MaxQueryPages 1 -All
+            @($result.Results).id | Should -Be @('1', '2', '3')
         }
 
         It 'Resolves v1 next links against the /wiki context path' {
             Mock -ModuleName tcs.confluence Invoke-WebRequest -ParameterFilter { $Uri.OriginalString -like '*/rest/api/content?limit=1' } {
                 [pscustomobject]@{ StatusCode = 200; StatusDescription = 'OK'; Content = '{"results":[{"id":"1"}],"_links":{"next":"/rest/api/content?limit=1&start=1"}}' }
             }
-            $null = Invoke-ConfluenceRequest -Method GET -Resource pages -ApiVersion 1 -Query @{ limit = 1 } -MaxQueryPages 2
+            $null = Invoke-ConfluenceRequest -Method GET -Resource pages -ApiVersion 1 -Query @{ limit = 1 } -MaxQueryPages 2 -WarningAction SilentlyContinue
             Should -Invoke -ModuleName tcs.confluence Invoke-WebRequest -Times 1 -Exactly -ParameterFilter { $Uri.OriginalString -eq 'https://contoso.atlassian.net/wiki/rest/api/content?limit=1&start=1' }
         }
 

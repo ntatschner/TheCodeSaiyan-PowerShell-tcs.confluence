@@ -7,6 +7,96 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-24
+
+### Breaking
+
+- `Get-ConfluencePage` and `Get-ConfluencePageContent` write the page objects to the pipeline
+  instead of an object with `Results` and `MultiPage` properties. Replace
+  `(Get-ConfluencePage ...).Results` with `Get-ConfluencePage ...`. The pages now pipe straight
+  into `Remove-ConfluencePage`.
+- The content builders escape their text and attributes (`&`, `<`, `>` and quotes). Text that
+  relied on being inserted as markup must use the new `-Raw` switch (`New-ConfluenceContentHeader`,
+  `New-ConfluenceContentTable`, `New-ConfluenceContentInfo`).
+- `New-ConfluenceContentInfo` returns the storage-format panel macro
+  (`<ac:structured-macro ac:name="info|tip|note|warning">` with a rich-text body) instead of an AUI
+  `div`, which Confluence did not render as a panel. `-Type error` produces the warning panel
+  (Confluence has no error panel). The content is wrapped in a paragraph unless `-Raw` is given.
+- `New-ConfluenceContentInternalLink -PageId` returns a storage-format page link
+  (`<ac:link><ri:page ri:content-title=... ri:space-key=.../></ac:link>`); use `-AsUrl` for the
+  previous `<a href>` output. `-InternalLinkURL` still returns an `<a href>` link. The new default
+  parameter set takes `-PageTitle` and `-SpaceKey`.
+- `New-ConfluencePageLayout` returns the layout markup as a string (was an object with
+  `LayoutType`, `LayoutXml` and `ContentSections`). The section parameters are ordinary parameters;
+  passing the wrong number of columns for the layout is an error.
+- `New-ConfluenceContentDivider` returns `<hr/>` (self-closed) and `<p>&#160;</p>`;
+  `Join-ConfluenceContent -Separator Space|Tab` uses `&#160;`/`&#8195;` instead of `&nbsp;`/`&emsp;`
+  (same rendering, but well-formed XML).
+- `New-ConfluenceContentTable`, `New-ConfluenceContentLink -TextBlock`: only addresses with a
+  scheme (`http://`, `https://`, `mailto:`) become links; file names such as `report.pdf`, bare
+  domains and bare e-mail addresses stay text.
+- `ConvertTo-ConfluenceHTML` escapes text (HTML in the Markdown is shown as text) and turns a
+  Markdown table into one table with one cell per column; the `|---|` row is skipped and marks the
+  header row.
+- `New-HtmlTable` and `Get-HtmlTableRowData` are removed. They duplicated
+  `New-ConfluenceContentTable`, were not used by the module and `New-HtmlTable` clashed with the
+  PSWriteHTML command of the same name.
+- `Invoke-ConfluenceRequest -Resource` uses the API version set with
+  `Set-ConfluenceContext -ApiVersion` when `-ApiVersion` is not passed (it always used v2). The page,
+  space, label and attachment commands still use the API version they are written for.
+- A space key that cannot be resolved to a space ID is reported as an error and no request is sent
+  (the request was previously sent without a space filter).
+- `New-ConfluencePage -Force` only updates a page in the same space, and reports an error instead
+  of choosing when several pages with the title exist outside the parent.
+
+### Added
+
+- `Search-ConfluenceContent -Cql` (CQL search through `/wiki/rest/api/search`).
+- `Get-ConfluencePageChild` (child pages; `-Recurse` for every descendant).
+- `Get-ConfluencePageLabel`, `Add-ConfluencePageLabel`, `Remove-ConfluencePageLabel`.
+- `Get-ConfluenceAttachment`, `Add-ConfluenceAttachment` (multipart upload that also works on
+  Windows PowerShell 5.1; uploading an existing file name adds a version).
+- `Clear-ConfluenceContext`.
+- `New-ConfluenceContentStatus` (status lozenge), `New-ConfluenceContentExpand` (expand macro) and
+  `New-ConfluenceContentJiraIssue` (Jira issue or JQL macro).
+- `Get-ConfluencePage -All`, `Get-ConfluencePageContent -All` and `Invoke-ConfluenceRequest -All`
+  read every result page; a warning is written when `-MaxQueryPages` stops while more results
+  exist.
+- `Update-ConfluencePage` without `-Version` reads the page and sends its version number plus one.
+- `Remove-ConfluencePage -Purge` moves the page to the trash and purges it.
+- `New-ConfluencePage`/`Update-ConfluencePage -SpaceId` (the old name `-SpaceKey` is an alias);
+  a space key is resolved to the space ID.
+- `New-ConfluenceContentTable` accepts hashtables and ordered dictionaries as rows.
+- `New-ConfluencePageLayout -Section` builds a layout with several sections.
+- Requests that get 429 Too Many Requests are retried up to four times, honouring `Retry-After`.
+- Space key to space ID lookups are cached for the session (cleared by `Set-ConfluenceContext` and
+  `Clear-ConfluenceContext`).
+- Tests that the documented Confluence parameters are sent (`space-id`, `content/search?cql=`,
+  `expand=body.storage`) and that every builder's output parses as XML.
+
+### Fixed
+
+- The v2 pages space filter was sent as `spaceId`; the documented parameter is `space-id`, so
+  space filters were ignored and pages from every space were returned.
+- Wildcard and CQL title searches were sent to `/wiki/rest/api/content`, which ignores `cql`; they
+  now use `/wiki/rest/api/content/search`. Page searches add `type = page`, and a space filter is
+  added to the CQL query. `Get-ConfluencePageContent` requests the body of search results with
+  `expand=body.<format>` (the v2 `body-format` parameter does not apply to the v1 search).
+- CQL values escaped `"` but not `\`, so a title ending in a backslash could change the query;
+  backslashes are escaped first.
+- `Get-ConfluencePageContent` removed `& # [ ] { }` and other characters from exact titles although
+  the value is URL-encoded, so such pages were never found.
+- `Remove-DuplicateConfluencePage` kept the page with the highest version number (an old page that
+  was edited often) instead of the newest page, and only looked at the first 75 pages of the space.
+  It now asks for the pages with that title across all result pages and sorts by `createdAt`.
+- Builders produced invalid storage format (and allowed markup injection) for text containing
+  `&` or `<`, and `New-ConfluenceContentDivider` returned an unclosed `<hr>`.
+- `New-ConfluenceContentTable` threw for hashtable rows, and recursed without end on
+  self-referencing cell values (for example a `DirectoryInfo`); nested tables now stop at three
+  levels.
+- `Invoke-ConfluenceRequest`: about 90 lines of URL repair were replaced by the URL normalised by
+  `Set-ConfluenceContext`.
+
 ## [0.1.1] - 2026-09-24
 
 ### Fixed

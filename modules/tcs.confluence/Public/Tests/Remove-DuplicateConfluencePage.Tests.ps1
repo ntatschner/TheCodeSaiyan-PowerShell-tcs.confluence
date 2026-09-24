@@ -14,11 +14,12 @@ AfterAll {
 Describe 'Remove-DuplicateConfluencePage' {
     BeforeAll {
         Set-ConfluenceContext -ConfluenceUrl 'https://contoso.atlassian.net' -Username 'user@contoso.com' -PersonalAccessToken 'token'
+        # Page 1 is the oldest page but was edited most (highest version); page 2 is the newest
         $pages = '{"results":[' +
-        '{"id":"1","title":"Report","parentId":"100","version":{"number":1,"createdAt":"2024-01-01T00:00:00Z"}},' +
-        '{"id":"2","title":"Report","parentId":"100","version":{"number":3,"createdAt":"2024-03-01T00:00:00Z"}},' +
-        '{"id":"3","title":"Report","parentId":"100","version":{"number":2,"createdAt":"2024-02-01T00:00:00Z"}},' +
-        '{"id":"4","title":"Report","parentId":"200","version":{"number":9}},' +
+        '{"id":"1","title":"Report","parentId":"100","createdAt":"2024-01-01T00:00:00Z","version":{"number":9,"createdAt":"2024-06-01T00:00:00Z"}},' +
+        '{"id":"2","title":"Report","parentId":"100","createdAt":"2024-03-01T00:00:00Z","version":{"number":1,"createdAt":"2024-03-01T00:00:00Z"}},' +
+        '{"id":"3","title":"Report","parentId":"100","createdAt":"2024-02-01T00:00:00Z","version":{"number":2,"createdAt":"2024-02-01T00:00:00Z"}},' +
+        '{"id":"4","title":"Report","parentId":"200","createdAt":"2025-01-01T00:00:00Z","version":{"number":9}},' +
         '{"id":"5","title":"Other","parentId":"100","version":{"number":1}}]}'
     }
 
@@ -31,7 +32,27 @@ Describe 'Remove-DuplicateConfluencePage' {
         }
     }
 
-    It 'Keeps the newest page and deletes the other duplicates under the same parent' {
+    It 'Asks Confluence for the pages with that title in the space, reading every result page' {
+        $null = Remove-DuplicateConfluencePage -SpaceKey 42 -ParentId 100 -PageTitle 'Report' -WhatIf
+        Should -Invoke -ModuleName tcs.confluence Invoke-WebRequest -Times 1 -Exactly -ParameterFilter {
+            $Method -eq 'GET' -and $Uri.OriginalString -eq 'https://contoso.atlassian.net/wiki/api/v2/pages?limit=250&space-id=42&title=Report'
+        }
+    }
+
+    It 'Finds duplicates beyond the first result pages' {
+        Mock -ModuleName tcs.confluence Invoke-WebRequest -ParameterFilter { $Method -eq 'GET' } {
+            $index = 0
+            if ($Uri.OriginalString -match 'cursor=(\d+)') { $index = [int]$Matches[1] }
+            $next = if ($index -lt 5) { ',"_links":{"next":"/wiki/api/v2/pages?cursor=' + ($index + 1) + '"}' } else { '' }
+            $item = '{"id":"' + (10 + $index) + '","title":"Report","parentId":"100","createdAt":"2024-01-0' + ($index + 1) + 'T00:00:00Z"}'
+            [pscustomobject]@{ StatusCode = 200; StatusDescription = 'OK'; Content = '{"results":[' + $item + ']' + $next + '}' }
+        }
+        $kept = Remove-DuplicateConfluencePage -SpaceKey 42 -ParentId 100 -PageTitle 'Report' -Confirm:$false
+        $kept.id | Should -Be '15'
+        Should -Invoke -ModuleName tcs.confluence Invoke-WebRequest -Times 5 -Exactly -ParameterFilter { $Method -eq 'DELETE' }
+    }
+
+    It 'Keeps the newest page by creation date (not version number) and deletes the other duplicates under the same parent' {
         $kept = Remove-DuplicateConfluencePage -SpaceKey 42 -ParentId 100 -PageTitle 'Report' -Confirm:$false
         $kept.id | Should -Be '2'
         Should -Invoke -ModuleName tcs.confluence Invoke-WebRequest -Times 2 -Exactly -ParameterFilter { $Method -eq 'DELETE' }

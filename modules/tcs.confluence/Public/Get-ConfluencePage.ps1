@@ -4,11 +4,16 @@ function Get-ConfluencePage {
         Gets Confluence pages by ID, by space or by title.
 
     .DESCRIPTION
-        Get-ConfluencePage retrieves pages through the Confluence v2 pages API. Use -PageId for a single
-        page, or -SpaceKey and/or -Search to list pages. An exact -Search title is sent as a title
-        filter; a title with wildcards (* ?) is sent as a CQL search through the v1 content API.
+        Get-ConfluencePage retrieves pages through the Confluence v2 pages API and writes the page
+        objects to the pipeline. Use -PageId for a single page, or -SpaceKey and/or -Search to list
+        pages. An exact -Search title is sent as the v2 title filter; a title with wildcards (* ?) is
+        searched with CQL through /wiki/rest/api/content/search (those results are v1 content
+        objects).
 
-        Returns the object from Invoke-ConfluenceRequest: the pages are in its Results property.
+        Up to -MaxQueryPages API result pages are read; a warning is written when more results are
+        available. Use -All to read every result page.
+
+        Before 0.2.0 the pages were wrapped in an object with Results and MultiPage properties.
 
     .PARAMETER PageId
         The ID of the page to retrieve.
@@ -25,18 +30,26 @@ function Get-ConfluencePage {
     .PARAMETER MaxQueryPages
         The maximum number of API result pages to retrieve. Default 3.
 
+    .PARAMETER All
+        Retrieve every API result page (ignores -MaxQueryPages).
+
     .EXAMPLE
-        (Get-ConfluencePage -PageId 123456).Results
+        Get-ConfluencePage -PageId 123456
 
         Returns page 123456.
 
     .EXAMPLE
-        (Get-ConfluencePage -SpaceKey DOCS -Search 'Release notes*').Results | Select-Object id, title
+        Get-ConfluencePage -SpaceKey DOCS -Search 'Release notes*' -All | Select-Object id, title
 
-        Lists the pages in the DOCS space whose title starts with "Release notes".
+        Lists every page in the DOCS space whose title starts with "Release notes".
+
+    .EXAMPLE
+        Get-ConfluencePage -SpaceKey DOCS -Search 'Draft*' | Remove-ConfluencePage -WhatIf
+
+        Shows which pages would be deleted.
 
     .OUTPUTS
-        System.Management.Automation.PSCustomObject with Results and MultiPage properties.
+        System.Management.Automation.PSCustomObject. One object per page.
     #>
     [CmdletBinding(DefaultParameterSetName = 'AllPages')]
     [OutputType([pscustomobject])]
@@ -56,13 +69,17 @@ function Get-ConfluencePage {
 
         [Parameter(HelpMessage = 'Max query pages.')]
         [ValidateRange(1, 1000)]
-        [int16]$MaxQueryPages = 3
+        [int16]$MaxQueryPages = 3,
+
+        [Parameter(HelpMessage = 'Retrieve every result page.', ParameterSetName = 'AllPages')]
+        [switch]$All
     )
 
     $queryParams = @{}
     $requestParams = @{
         Method        = 'GET'
         Resource      = 'pages'
+        ApiVersion    = 2
         MaxQueryPages = $MaxQueryPages
     }
     if ($PSCmdlet.ParameterSetName -eq 'PageId') {
@@ -79,11 +96,9 @@ function Get-ConfluencePage {
                 $queryParams.title = $Search
             }
         }
+        if ($All) { $requestParams.All = $true }
     }
     $requestParams.Query = $queryParams
-    if ($queryParams.Count -gt 0) {
-        Write-Verbose ('Query parameters: {0}' -f (($queryParams.GetEnumerator() | ForEach-Object { "$($_.Key)=$($_.Value)" }) -join ', '))
-    }
 
     $TelemetryArgs = @{
         ModuleName    = $MyInvocation.MyCommand.Module.Name
@@ -95,8 +110,8 @@ function Get-ConfluencePage {
     $telemetryFailed = $false
     try {
         $response = Invoke-ConfluenceRequest @requestParams -ErrorAction Stop
-        if (-not $response.Results -or @($response.Results).Count -eq 0) { Write-Verbose 'No results returned.' }
-        return $response
+        if (@($response.Results).Count -eq 0) { Write-Verbose 'No results returned.' }
+        foreach ($page in @($response.Results)) { $page }
     }
     catch {
         $telemetryFailed = $true

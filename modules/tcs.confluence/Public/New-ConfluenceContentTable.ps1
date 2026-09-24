@@ -6,14 +6,18 @@ function New-ConfluenceContentTable {
     .DESCRIPTION
         New-ConfluenceContentTable converts objects to a table: the property names of the first object
         become the header row and every object becomes a row. All objects must be of the same type and
-        have the same property names.
+        have the same property names. Hashtables and ordered dictionaries are also accepted as rows;
+        their keys are the columns.
 
-        Cell values that are collections or objects with several properties are rendered as nested
-        tables. Text that contains a web address is converted to links. Values are inserted as given,
-        so they may contain markup. An empty collection returns an empty string.
+        Cell values that are collections, dictionaries or objects with several properties are rendered
+        as nested tables, up to three levels deep (deeper values are shown as text). In the data cells (all but the first column) addresses with a scheme
+        (http://, https:// or mailto:) are converted to links; file names such as report.pdf and bare
+        e-mail addresses are not. Header names and cell values are escaped, so the result is always
+        well-formed storage format; use -Raw to insert cell values that already are storage-format
+        markup. An empty collection returns an empty string.
 
     .PARAMETER TableData
-        The objects to show in the table.
+        The objects (or hashtables / ordered dictionaries) to show in the table.
 
     .PARAMETER TableType
         The CSS class(es) of the table, for example Wrapped or "Relative Table".
@@ -49,6 +53,21 @@ function New-ConfluenceContentTable {
 
     .PARAMETER FirstCellAlignmentFormatting
         Text alignment of the first cell of each row. Defaults to -CellAlignmentFormatting.
+
+    .PARAMETER Raw
+        Insert cell values as given, without escaping them or converting addresses to links. Use it
+        when the values are storage-format fragments, for example links or status lozenges built with
+        the other New-ConfluenceContent* functions. Header names are still escaped.
+
+    .EXAMPLE
+        New-ConfluenceContentTable -TableData @([ordered]@{ Service = 'web'; Docs = 'https://contoso.com/web' })
+
+        Returns a table from an ordered dictionary; the address becomes a link.
+
+    .EXAMPLE
+        New-ConfluenceContentTable -TableData @([pscustomobject]@{ Name = 'web'; State = (New-ConfluenceContentStatus -Text 'OK' -Colour Green) }) -Raw
+
+        Returns a table whose State cells contain status lozenges.
 
     .EXAMPLE
         $rows = Get-Process | Select-Object -First 5 Name, Id
@@ -109,7 +128,10 @@ function New-ConfluenceContentTable {
 
         [Parameter(HelpMessage = 'The text alignment to be applied to the first cell.')]
         [ValidateSet('Left', 'Center', 'Right')]
-        [string]$FirstCellAlignmentFormatting
+        [string]$FirstCellAlignmentFormatting,
+
+        [Parameter(HelpMessage = 'Insert cell values as storage-format markup without escaping them.')]
+        [switch]$Raw
     )
 
     $TelemetryArgs = @{
@@ -125,15 +147,48 @@ function New-ConfluenceContentTable {
             return ''
         }
 
+        # Rows are objects (columns = property names) or dictionaries (columns = keys)
+        $getColumns = {
+            param($Row)
+            if ($Row -is [System.Collections.IDictionary]) { return ($Row.Keys | ForEach-Object { [string]$_ }) }
+            return $Row.PSObject.Properties.Name
+        }
+        $getValue = {
+            param($Row, [string]$Column)
+            if ($Row -is [System.Collections.IDictionary]) { return , $Row[$Column] }
+            return , $Row.PSObject.Properties[$Column].Value
+        }
+
         $firstRow = $TableData[0]
+        if ($null -eq $firstRow) {
+            Write-Error 'Table rows must not be null.'
+            return
+        }
+        $isDictionary = $firstRow -is [System.Collections.IDictionary]
         $firstRowType = $firstRow.GetType()
-        $firstRowProperties = @($firstRow.PSObject.Properties.Name)
+        $firstRowProperties = @(& $getColumns $firstRow)
         foreach ($row in $TableData) {
-            if ($null -eq $row -or $row.GetType() -ne $firstRowType) {
+            if ($null -eq $row) {
+                Write-Error 'Table rows must not be null.'
+                return
+            }
+            if ($isDictionary) {
+                if ($row -isnot [System.Collections.IDictionary]) {
+                    Write-Error 'All table rows must be of the same type.'
+                    return
+                }
+                $rowColumns = @(& $getColumns $row)
+                if ($rowColumns.Count -ne $firstRowProperties.Count -or @($rowColumns | Where-Object { $firstRowProperties -notcontains $_ }).Count -gt 0) {
+                    Write-Error 'All table rows must have the same column names.'
+                    return
+                }
+                continue
+            }
+            if ($row.GetType() -ne $firstRowType) {
                 Write-Error 'All table rows must be of the same type.'
                 return
             }
-            if (Compare-Object -ReferenceObject $firstRowProperties -DifferenceObject @($row.PSObject.Properties.Name) -SyncWindow 0) {
+            if (Compare-Object -ReferenceObject $firstRowProperties -DifferenceObject @(& $getColumns $row) -SyncWindow 0) {
                 Write-Error 'All table rows must have the same column names.'
                 return
             }
@@ -142,26 +197,37 @@ function New-ConfluenceContentTable {
             $FirstCellAlignmentFormatting = $CellAlignmentFormatting
         }
 
-        $URLFormatting = '\b((http|https):\/\/)?((www\.)?([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,})(\/[a-zA-Z0-9-._~:\/?#[\]@!$&''()*+,;=]*)?\b'
-
-        # Renders one cell value: nested table for collections/complex objects, links for URLs
+        # Renders one cell value: nested table for collections/complex objects, escaped text otherwise
         $renderValue = {
             param($Value, [bool]$DetectLinks)
             if ($null -eq $Value) { return '' }
             $isScalar = ($Value -is [string]) -or ($Value -is [ValueType])
-            if (-not $isScalar) {
-                if ($Value -is [System.Collections.IEnumerable] -and @($Value).Count -ge 1) {
-                    return (New-ConfluenceContentTable -TableData @($Value))
+            # Nested tables stop at three levels, so self-referencing objects cannot recurse forever
+            if (-not $isScalar -and $script:ConfluenceTableNesting -lt 3) {
+                $nestedRows = $null
+                if ($Value -is [System.Collections.IDictionary]) {
+                    $nestedRows = @(, $Value)
                 }
-                if (@($Value.PSObject.Properties).Count -gt 1) {
-                    return (New-ConfluenceContentTable -TableData @($Value))
+                elseif ($Value -is [System.Collections.IEnumerable] -and @($Value).Count -ge 1) {
+                    $nestedRows = @($Value)
+                }
+                elseif (@($Value.PSObject.Properties).Count -gt 1) {
+                    $nestedRows = @($Value)
+                }
+                if ($null -ne $nestedRows) {
+                    $script:ConfluenceTableNesting++
+                    try {
+                        return (New-ConfluenceContentTable -TableData $nestedRows -Raw:$Raw)
+                    }
+                    finally {
+                        $script:ConfluenceTableNesting--
+                    }
                 }
             }
             $text = $Value.ToString()
-            if ($DetectLinks -and [regex]::IsMatch($text, $URLFormatting)) {
-                return (New-ConfluenceContentLink -TextBlock $text)
-            }
-            return $text
+            if ($Raw) { return $text }
+            if ($DetectLinks) { return (ConvertTo-ConfluenceLinkedText -Text $text) }
+            return (ConvertTo-ConfluenceXmlText -Text $text)
         }
 
         $TableHtml = "<table class='$TableType' style='$TableTypeStyle'>"
@@ -170,7 +236,7 @@ function New-ConfluenceContentTable {
             $headerClose = Get-HtmlFormatTag -Format $HeaderStringFormatting -Close
             $TableHtml += '<thead><tr>'
             foreach ($header in $firstRowProperties) {
-                $TableHtml += "<th style='text-align: $HeaderAlignmentFormatting;' scope='col'>$headerOpen$header$headerClose</th>"
+                $TableHtml += "<th style='text-align: $HeaderAlignmentFormatting;' scope='col'>$headerOpen$(ConvertTo-ConfluenceXmlText -Text $header)$headerClose</th>"
             }
             $TableHtml += '</tr></thead>'
         }
@@ -185,18 +251,19 @@ function New-ConfluenceContentTable {
         foreach ($row in $TableData) {
             $TableHtml += '<tr>'
             $isFirstCell = $true
-            foreach ($cell in $row.PSObject.Properties) {
+            foreach ($column in $firstRowProperties) {
+                $cellValue = & $getValue $row $column
                 if ($isFirstCell) {
                     $cellTag = if ($VerticalHeader) { 'th' } else { 'td' }
                     $scope = if ($VerticalHeader) { " scope='row'" } else { '' }
                     $wrapOpen = if ($useHeading) { "<h$FirstCellHeaderFormat>" } else { '<span>' }
                     $wrapClose = if ($useHeading) { "</h$FirstCellHeaderFormat>" } else { '</span>' }
-                    $value = & $renderValue $cell.Value $false
+                    $value = & $renderValue $cellValue $false
                     $TableHtml += "<$cellTag$scope style='text-align: $FirstCellAlignmentFormatting;'>$wrapOpen$firstOpen$value$firstClose$wrapClose</$cellTag>"
                     $isFirstCell = $false
                 }
                 else {
-                    $value = & $renderValue $cell.Value $true
+                    $value = & $renderValue $cellValue $true
                     $TableHtml += "<td style='text-align: $CellAlignmentFormatting;'>$cellOpen$value$cellClose</td>"
                 }
             }

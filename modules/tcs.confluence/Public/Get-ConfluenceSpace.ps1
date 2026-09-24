@@ -64,10 +64,10 @@ function Get-ConfluenceSpace {
     $telemetryFailed = $false
     try {
         if ($PSCmdlet.ParameterSetName -eq 'SpaceId') {
-            return (Invoke-ConfluenceRequest -Method GET -Resource spaces -Id $SpaceId -MaxQueryPages 1 -ErrorAction Stop)
+            return (Invoke-ConfluenceRequest -Method GET -Resource spaces -ApiVersion 2 -Id $SpaceId -MaxQueryPages 1 -ErrorAction Stop)
         }
 
-        $response = Invoke-ConfluenceRequest -Method GET -Resource spaces -Query @{ limit = $ResultsLimit } -MaxQueryPages $MaxQueryPages -ErrorAction Stop
+        $response = Invoke-ConfluenceRequest -Method GET -Resource spaces -ApiVersion 2 -Query @{ limit = $ResultsLimit } -MaxQueryPages $MaxQueryPages -ErrorAction Stop
         $results = $response.Results
         if ($Search) {
             $results = $results | Where-Object { $_.name -like $Search }

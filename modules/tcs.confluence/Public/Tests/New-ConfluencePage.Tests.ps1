@@ -14,7 +14,7 @@ AfterAll {
 Describe 'New-ConfluencePage' {
     BeforeAll {
         Set-ConfluenceContext -ConfluenceUrl 'https://contoso.atlassian.net' -Username 'user@contoso.com' -PersonalAccessToken 'token'
-        $pageParams = @{ SpaceKey = '42'; ParentId = '100'; Title = 'Release notes'; Status = 'current'; Content = '<p>Hello</p>' }
+        $pageParams = @{ SpaceId = '42'; ParentId = '100'; Title = 'Release notes'; Status = 'current'; Content = '<p>Hello</p>' }
         $conflict = [pscustomobject]@{ StatusCode = 400; StatusDescription = 'Bad Request'; Content = '{"errors":[{"title":"A page with this title already exists: A page already exists with the same TITLE in this space"}]}' }
     }
 
@@ -46,7 +46,7 @@ Describe 'New-ConfluencePage' {
         BeforeEach {
             Mock -ModuleName tcs.confluence Invoke-WebRequest -ParameterFilter { $Method -eq 'POST' } { $conflict }
             Mock -ModuleName tcs.confluence Invoke-WebRequest -ParameterFilter { $Method -eq 'GET' } {
-                [pscustomobject]@{ StatusCode = 200; StatusDescription = 'OK'; Content = '{"results":[{"id":"7","title":"Release notes","parentId":"999","version":{"number":1}},{"id":"8","title":"Release notes","parentId":"100","version":{"number":4}}]}' }
+                [pscustomobject]@{ StatusCode = 200; StatusDescription = 'OK'; Content = '{"results":[{"id":"7","title":"Release notes","spaceId":"42","parentId":"999","version":{"number":1}},{"id":"8","title":"Release notes","spaceId":"42","parentId":"100","version":{"number":4}}]}' }
             }
             Mock -ModuleName tcs.confluence Invoke-WebRequest -ParameterFilter { $Method -eq 'PUT' } {
                 [pscustomobject]@{ StatusCode = 200; StatusDescription = 'OK'; Content = '{"id":"8","title":"Release notes","version":{"number":5}}' }
@@ -69,10 +69,61 @@ Describe 'New-ConfluencePage' {
 
         It 'Never overwrites a page with a different title' {
             Mock -ModuleName tcs.confluence Invoke-WebRequest -ParameterFilter { $Method -eq 'GET' } {
-                [pscustomobject]@{ StatusCode = 200; StatusDescription = 'OK'; Content = '{"results":[{"id":"9","title":"Release notes (old)","parentId":"100","version":{"number":1}}]}' }
+                [pscustomobject]@{ StatusCode = 200; StatusDescription = 'OK'; Content = '{"results":[{"id":"9","title":"Release notes (old)","spaceId":"42","parentId":"100","version":{"number":1}}]}' }
             }
             { New-ConfluencePage @pageParams -Force -ErrorAction Stop } | Should -Throw -ExpectedMessage '*no page with exactly that title*'
             Should -Invoke -ModuleName tcs.confluence Invoke-WebRequest -Times 0 -Exactly -ParameterFilter { $Method -eq 'PUT' }
+        }
+    }
+
+    Context 'Title conflict across spaces' {
+        BeforeEach {
+            Mock -ModuleName tcs.confluence Invoke-WebRequest -ParameterFilter { $Method -eq 'POST' } { $conflict }
+            Mock -ModuleName tcs.confluence Invoke-WebRequest -ParameterFilter { $Method -eq 'PUT' } {
+                [pscustomobject]@{ StatusCode = 200; StatusDescription = 'OK'; Content = '{"id":"x"}' }
+            }
+        }
+
+        It 'Looks the page up with the documented space-id and title parameters' {
+            Mock -ModuleName tcs.confluence Invoke-WebRequest -ParameterFilter { $Method -eq 'GET' } {
+                [pscustomobject]@{ StatusCode = 200; StatusDescription = 'OK'; Content = '{"results":[{"id":"8","title":"Release notes","spaceId":"42","parentId":"100","version":{"number":4}}]}' }
+            }
+            $null = New-ConfluencePage @pageParams -Force
+            Should -Invoke -ModuleName tcs.confluence Invoke-WebRequest -Times 1 -Exactly -ParameterFilter {
+                $Method -eq 'GET' -and $Uri.OriginalString -like 'https://contoso.atlassian.net/wiki/api/v2/pages?*space-id=42*' -and $Uri.OriginalString -like '*title=Release+notes*'
+            }
+        }
+
+        It 'Never updates a page with the same title in another space' {
+            Mock -ModuleName tcs.confluence Invoke-WebRequest -ParameterFilter { $Method -eq 'GET' } {
+                [pscustomobject]@{ StatusCode = 200; StatusDescription = 'OK'; Content = '{"results":[{"id":"70","title":"Release notes","spaceId":"999","parentId":"5","version":{"number":1}}]}' }
+            }
+            { New-ConfluencePage @pageParams -Force -ErrorAction Stop } | Should -Throw -ExpectedMessage '*no page with exactly that title*'
+            Should -Invoke -ModuleName tcs.confluence Invoke-WebRequest -Times 0 -Exactly -ParameterFilter { $Method -eq 'PUT' }
+        }
+
+        It 'Reports an error instead of choosing between several pages outside the parent' {
+            Mock -ModuleName tcs.confluence Invoke-WebRequest -ParameterFilter { $Method -eq 'GET' } {
+                [pscustomobject]@{ StatusCode = 200; StatusDescription = 'OK'; Content = '{"results":[{"id":"1","title":"Release notes","spaceId":"42","parentId":"5"},{"id":"2","title":"Release notes","spaceId":"42","parentId":"6"}]}' }
+            }
+            { New-ConfluencePage @pageParams -Force -ErrorAction Stop } | Should -Throw -ExpectedMessage '*2 pages titled*'
+            Should -Invoke -ModuleName tcs.confluence Invoke-WebRequest -Times 0 -Exactly -ParameterFilter { $Method -eq 'PUT' }
+        }
+    }
+
+    Context 'Space key' {
+        It 'Resolves a space key given to -SpaceKey (alias) to the space id' {
+            InModuleScope tcs.confluence { $script:ConfluenceSpaceIdCache = $null }
+            Mock -ModuleName tcs.confluence Invoke-WebRequest -ParameterFilter { $Method -eq 'GET' -and $Uri.OriginalString -like '*/spaces?keys=DOCS' } {
+                [pscustomobject]@{ StatusCode = 200; StatusDescription = 'OK'; Content = '{"results":[{"id":"98765","key":"DOCS"}]}' }
+            }
+            Mock -ModuleName tcs.confluence Invoke-WebRequest -ParameterFilter { $Method -eq 'POST' } {
+                [pscustomobject]@{ StatusCode = 200; StatusDescription = 'OK'; Content = '{"id":"1"}' }
+            }
+            $null = New-ConfluencePage -SpaceKey DOCS -ParentId 100 -Title 't' -Status current -Content 'c'
+            Should -Invoke -ModuleName tcs.confluence Invoke-WebRequest -Times 1 -Exactly -ParameterFilter {
+                $Method -eq 'POST' -and ([System.Text.Encoding]::UTF8.GetString($Body) | ConvertFrom-Json).spaceId -eq '98765'
+            }
         }
     }
 
@@ -82,7 +133,7 @@ Describe 'New-ConfluencePage' {
                 [pscustomobject]@{ StatusCode = 500; StatusDescription = 'Internal Server Error'; Content = '' }
             }
             Mock -ModuleName tcs.confluence Invoke-WebRequest -ParameterFilter { $Method -eq 'GET' } {
-                [pscustomobject]@{ StatusCode = 200; StatusDescription = 'OK'; Content = '{"results":[{"id":"8","title":"Release notes","parentId":"100"}]}' }
+                [pscustomobject]@{ StatusCode = 200; StatusDescription = 'OK'; Content = '{"results":[{"id":"8","title":"Release notes","spaceId":"42","parentId":"100"}]}' }
             }
             $result = New-ConfluencePage @pageParams -WarningAction SilentlyContinue -WarningVariable pageWarning
             $result.id | Should -Be '8'

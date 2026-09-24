@@ -5,16 +5,26 @@ function Invoke-ConfluenceRequest {
 
     .DESCRIPTION
         Invoke-ConfluenceRequest is the transport used by every tcs.confluence REST command. It builds
-        the endpoint from -Resource (or an explicit -URIPath), appends query parameters and an optional
-        CQL title search, sends the request with the credential stored by Set-ConfluenceContext and
-        follows "next" pagination links for GET requests up to -MaxQueryPages pages.
+        the endpoint from -Resource (or an explicit -URIPath) on the site set by Set-ConfluenceContext,
+        appends query parameters and an optional CQL title search, sends the request with the stored
+        credential and follows "next" pagination links for GET requests up to -MaxQueryPages pages
+        (or all pages with -All).
 
         Behaviour that is applied automatically:
-        - A wildcard (* or ?) -Search against v2 pages switches to the v1 content API, which supports CQL.
-        - A spaceKey query value for v2 pages is resolved to a spaceId (numeric keys are used as-is).
-        - Legacy short paths (/pages, /content, /spaces) are mapped to their full API paths.
+        - -Resource uses the API version given by -ApiVersion or, when that is not given, the version
+          chosen with Set-ConfluenceContext -ApiVersion (v2 by default).
+        - A -Search against the page or content collection is sent to the v1 CQL search endpoint
+          /wiki/rest/api/content/search as cql=title = "..." (or title ~ "..." with wildcards * ?).
+          Page searches also add type = page. CQL values are escaped (backslash, then quote).
+        - A spaceKey query value is resolved to the numeric space ID and sent as the documented
+          space-id parameter for v2 pages (keys are looked up once per session and cached), or added
+          to the CQL query (space = "KEY" or space.id = 123) for searches. A key that cannot be
+          resolved is reported as an error and no request is sent.
+        - The short paths /pages, /content and /spaces are mapped to their full API paths.
+        - A 429 Too Many Requests response is retried, honouring the Retry-After header.
         - Pagination links pointing to a different host are not followed, so the credential is only
           ever sent to the Confluence site in the context.
+        - When -MaxQueryPages stops the paging while more results are available, a warning is written.
 
         HTTP error responses are reported as errors that include the status and the Confluence error
         titles; use -ErrorAction Stop to turn them into terminating errors.
@@ -32,37 +42,41 @@ function Invoke-ConfluenceRequest {
         A resource shortcut used to build the path: pages, content or spaces.
 
     .PARAMETER ApiVersion
-        The API version used with -Resource: 2 (default, /wiki/api/v2) or 1 (/wiki/rest/api).
+        The API version used with -Resource: 2 (/wiki/api/v2) or 1 (/wiki/rest/api). When not given,
+        the version from Set-ConfluenceContext -ApiVersion is used.
 
     .PARAMETER Id
         A resource ID appended to the path built from -Resource, for example a page ID.
 
     .PARAMETER RawPath
-        Do not build the path from -Resource; use -URIPath exactly as given.
+        Do not build the path from -Resource or map short paths; use -URIPath exactly as given.
 
     .PARAMETER Body
         The JSON request body for POST and PUT requests.
 
     .PARAMETER Query
         A hashtable of query-string parameters, for example @{ limit = 25; spaceKey = 'DOCS' }.
-        Values are URL-encoded.
+        Values are URL-encoded. The caller's hashtable is not changed.
 
     .PARAMETER MaxQueryPages
         The maximum number of result pages to retrieve for GET requests. Default 3.
 
+    .PARAMETER All
+        Follow the pagination links until every result has been retrieved (ignores -MaxQueryPages).
+
     .PARAMETER Search
-        A page title to search for. Wildcards (* ?) produce a CQL "title ~" search, otherwise an exact
-        "title =" search.
+        A page title to search for with CQL. Wildcards (* ?) produce a "title ~" search, otherwise an
+        exact "title =" search.
 
     .EXAMPLE
         Invoke-ConfluenceRequest -Method GET -Resource pages -Query @{ spaceKey = 'DOCS'; limit = 50 }
 
-        Returns up to three pages of results for the pages in the DOCS space.
+        Returns up to three pages of results for the pages in the DOCS space (sent as space-id).
 
     .EXAMPLE
-        Invoke-ConfluenceRequest -Method GET -Resource pages -Search 'Release*'
+        Invoke-ConfluenceRequest -Method GET -Resource pages -Search 'Release*' -All
 
-        Searches for pages whose title starts with "Release" using the v1 CQL search.
+        Searches every page whose title matches "Release*" through /wiki/rest/api/content/search.
 
     .EXAMPLE
         Invoke-ConfluenceRequest -Method DELETE -Resource pages -Id 123456 -ErrorAction Stop
@@ -86,14 +100,14 @@ function Invoke-ConfluenceRequest {
         [ValidateSet('pages', 'content', 'spaces')]
         [string]$Resource,
 
-        [Parameter(HelpMessage = 'API version for -Resource. 1=legacy, 2=new. Default 2.')]
+        [Parameter(HelpMessage = 'API version for -Resource. 1=legacy, 2=new. Default: the context API version.')]
         [ValidateSet(1, 2)]
-        [int]$ApiVersion = 2,
+        [int]$ApiVersion,
 
         [Parameter(HelpMessage = 'Optional resource Id when using -Resource.')]
         [string]$Id,
 
-        [Parameter(HelpMessage = 'Bypass smart path building even if -Resource supplied.')]
+        [Parameter(HelpMessage = 'Use -URIPath exactly as given.')]
         [switch]$RawPath,
 
         [Parameter(HelpMessage = 'The body of the request.')]
@@ -105,7 +119,10 @@ function Invoke-ConfluenceRequest {
         [Parameter(HelpMessage = 'Maximum number of result pages to retrieve.')]
         [int16]$MaxQueryPages = 3,
 
-        [Parameter(HelpMessage = 'The search string to use for the request. Using CQL syntax.')]
+        [Parameter(HelpMessage = 'Retrieve every result page.')]
+        [switch]$All,
+
+        [Parameter(HelpMessage = 'A page title to search for with CQL; wildcards (* ?) supported.')]
         [string]$Search
     )
 
@@ -118,326 +135,202 @@ function Invoke-ConfluenceRequest {
     Invoke-TelemetryCollection @TelemetryArgs -Stage Start -ClearTimer
     $telemetryFailed = $false
     try {
-        # Helper for URL encoding (portable; avoids System.Web dependency)
-        function ConvertTo-UrlEncodedValue([string]$Value) {
-            if ($null -eq $Value) { return '' }
-            return [System.Net.WebUtility]::UrlEncode($Value)
+        $context = $script:ConfluenceContext
+
+        # --- Path ---
+        if (-not $RawPath -and -not $URIPath -and $Resource) {
+            if (-not $PSBoundParameters.ContainsKey('ApiVersion')) {
+                $ApiVersion = 2
+                if ($context -and $context.ApiVersion -eq 'v1') { $ApiVersion = 1 }
+            }
+            $resourcePaths = @{
+                2 = @{ pages = '/wiki/api/v2/pages'; spaces = '/wiki/api/v2/spaces'; content = '/wiki/rest/api/content' }
+                1 = @{ pages = '/wiki/rest/api/content'; spaces = '/wiki/rest/api/space'; content = '/wiki/rest/api/content' }
+            }
+            $URIPath = $resourcePaths[$ApiVersion][$Resource]
+            if ($Id) { $URIPath = "$URIPath/$Id" }
         }
-
-        # Work on a copy so the caller's hashtable is not changed (spaceKey -> spaceId rewrite)
-        if ($Query) { $Query = $Query.Clone() } else { $Query = @{} }
-
-        # Build URIPath from -Resource unless RawPath or explicit URIPath already provided ---
-        if (-not $RawPath.IsPresent -and -not $URIPath -and $Resource) {
-            switch ($ApiVersion) {
-                2 {
-                    switch ($Resource) {
-                        'pages' { $URIPath = "/wiki/api/v2/pages" }
-                        'spaces' { $URIPath = "/wiki/api/v2/spaces" }
-                        'content' { Write-Verbose "Resource 'content' with v2 not broadly supported; defaulting to v1 /content."; $ApiVersion = 1; $URIPath = "/wiki/rest/api/content" }
-                    }
-                }
-                1 {
-                    switch ($Resource) {
-                        'pages' { $URIPath = "/wiki/rest/api/content"; Write-Verbose "Mapping resource 'pages' to v1 /content." }
-                        'content' { $URIPath = "/wiki/rest/api/content" }
-                        'spaces' { $URIPath = "/wiki/rest/api/space" }
-                    }
-                }
-            }
-            if ($Id) {
-                $URIPath = ($URIPath.TrimEnd('/')) + "/$Id"
-            }
-            Write-Verbose "Constructed URIPath from Resource/ApiVersion: $URIPath"
-        } elseif (-not $URIPath) {
-            Write-Error "Provide either -URIPath or -Resource."
+        elseif (-not $URIPath) {
+            Write-Error 'Provide either -URIPath or -Resource.'
             return
         }
-
-        $ConfluenceContext = $script:ConfluenceContext
-        if ($null -eq $ConfluenceContext -or $null -eq $script:ConfluenceCredential) {
+        if ($null -eq $context -or $null -eq $script:ConfluenceCredential) {
             Write-Error 'No Confluence context is set. Run Set-ConfluenceContext first.'
             return
         }
-        Write-Verbose ("Raw ConnectionURI object(s): {0}" -f ($ConfluenceContext.ConnectionURI -join ', '))
 
-        # --- Enhanced base normalization (strip api suffix if present) ---
-        $rawBase = ($ConfluenceContext.ConnectionURI | ForEach-Object { "$($_)" }) -join ''
-        $rawBase = $rawBase.Trim()
-        if (-not $rawBase) { Write-Error "Empty ConnectionURI (after trimming)."; return }
-        if ($rawBase.StartsWith('"') -and $rawBase.EndsWith('"')) { $rawBase = $rawBase.Trim('"') }
-        if ($rawBase.StartsWith("'") -and $rawBase.EndsWith("'")) { $rawBase = $rawBase.Trim("'") }
-        $rawBase = ($rawBase -replace '\s+', '')
-        $rawBase = ($rawBase -replace '^(https?://)+', '$1')
-
-        if ($rawBase -notmatch '^[a-zA-Z][a-zA-Z0-9+\-.]*://') {
-            $rawBase = "https://$rawBase"
-            Write-Verbose "Added https:// scheme to base URI candidate."
+        $path = $URIPath.Trim()
+        if (-not $path.StartsWith('/')) { $path = "/$path" }
+        if (-not $RawPath) {
+            $shortPaths = @{ '/pages' = '/wiki/api/v2/pages'; '/content' = '/wiki/rest/api/content'; '/spaces' = '/wiki/api/v2/spaces' }
+            if ($shortPaths.ContainsKey($path.ToLowerInvariant())) { $path = $shortPaths[$path.ToLowerInvariant()] }
         }
 
-        # Strip trailing known API suffixes up-front to avoid compounded duplication later
-        $rawBaseNoApi = $rawBase -replace '(?i)/(?:wiki/)?(?:api/v2|rest/api)/*$', ''
-        if ($rawBaseNoApi -ne $rawBase) {
-            Write-Verbose "Trimmed API suffix from base URI ('$rawBase' -> '$rawBaseNoApi')."
-            $rawBase = $rawBaseNoApi
-        }
+        # --- Query and CQL ---
+        # Work on a copy so the caller's hashtable is not changed
+        $queryValues = @{}
+        if ($Query) { foreach ($key in @($Query.get_Keys())) { $queryValues[$key] = $Query[$key] } }
+        $cqlClauses = New-Object -TypeName System.Collections.Generic.List[string]
 
-        $baseUriObj = $null
-        if (-not [System.Uri]::TryCreate($rawBase, [System.UriKind]::Absolute, [ref]$baseUriObj)) {
-            Write-Error "Failed to parse ConnectionURI after normalization attempt. Value: '$rawBase'"
-            return
-        }
-        if ($baseUriObj.Query) { Write-Verbose "Stripping query part from base URI." }
-        if ($baseUriObj.Fragment) { Write-Verbose "Stripping fragment part from base URI." }
-
-        $BaseUriString = "{0}://{1}{2}" -f $baseUriObj.Scheme, $baseUriObj.Authority, ($baseUriObj.AbsolutePath.TrimEnd('/'))
-        if (-not $BaseUriString) { Write-Error "Failed to reconstruct normalized base URI."; return }
-        Write-Verbose "Normalized base URI (pre path merge): $BaseUriString"
-
-        try {
-            $OriginalBaseUriString = $BaseUriString
-            $BaseUriString = $BaseUriString.TrimEnd('/')
-            Write-Verbose "BaseUri normalized from '$OriginalBaseUriString' to '$BaseUriString'"
-            $URIPathNormalized = $URIPath
-            Write-Verbose "Original URIPath: '$URIPath'"
-            if (-not $URIPathNormalized.StartsWith('/')) { $URIPathNormalized = "/$URIPathNormalized" }
-
-            if ($BaseUriString -match '/wiki$' -and $URIPathNormalized -like '/wiki/*') {
-                Write-Verbose "Detected duplicate /wiki segment. Removing leading /wiki from path."
-                $URIPathNormalized = $URIPathNormalized.Substring(5)
+        if (-not $RawPath -and -not [string]::IsNullOrWhiteSpace($Search)) {
+            if ($path -match '^/wiki/api/v2/pages/?$') {
+                $path = '/wiki/rest/api/content/search'
+                $cqlClauses.Add('type = page')
             }
-
-            # Legacy simple path normalization (auto-upgrade older function calls)
-            switch ($URIPathNormalized.ToLower()) {
-                '/pages' {
-                    Write-Verbose "Legacy path '/Pages' mapped to '/wiki/api/v2/pages'."
-                    $URIPathNormalized = '/wiki/api/v2/pages'
-                }
-                '/content' {
-                    Write-Verbose "Legacy path '/Content' mapped to '/wiki/rest/api/content'."
-                    $URIPathNormalized = '/wiki/rest/api/content'
-                }
-                '/spaces' {
-                    Write-Verbose "Legacy path '/Spaces' mapped to '/wiki/api/v2/spaces'."
-                    $URIPathNormalized = '/wiki/api/v2/spaces'
-                }
+            elseif ($path -match '^/wiki/rest/api/content/?$') {
+                $path = '/wiki/rest/api/content/search'
             }
-
-            # --- Automatic wildcard / API version handling ---
-            $UsingV2Pages = $false
-            if ($URIPathNormalized -match '^/wiki/api/v2/pages' -or $URIPathNormalized -match '^/api/v2/pages') {
-                if ($URIPathNormalized -match '^/api/v2/') { $URIPathNormalized = "/wiki$URIPathNormalized" }
-                $UsingV2Pages = $true
-            }
-            $WildcardSearch = ([string]::IsNullOrWhiteSpace($Search) -eq $false -and $Search -match '[\*\?]')
-            if ($UsingV2Pages -and $WildcardSearch) {
-                Write-Verbose "Wildcard search detected for v2 pages path. Switching endpoint to v1 content API for CQL compatibility."
-                if ($URIPathNormalized -match '^/wiki/api/v2/pages/(\d+)$') {
-                    $pageId = $Matches[1]
-                    $URIPathNormalized = "/wiki/rest/api/content/$pageId"
-                } else {
-                    $URIPathNormalized = "/wiki/rest/api/content"
-                }
-                $UsingV2Pages = $false
-            }
-
-            $EndpointBase = "$BaseUriString$URIPathNormalized"
-            $EndpointBeforeCollapse = $EndpointBase
-            $EndpointBase = [regex]::Replace($EndpointBase, '/wiki/(api/v2|rest/api)/wiki/\1', '/wiki/$1')
-            if ($EndpointBase -ne $EndpointBeforeCollapse) { Write-Verbose "Collapsed duplicated API path segment in endpoint base." }
-            Write-Verbose "Normalized URIPath: '$URIPathNormalized'"
-            Write-Verbose "Endpoint base (pre query): $EndpointBase"
         }
-        catch {
-            Write-Error "Invalid URL components. Base: '$($ConfluenceContext.ConnectionURI)' Path: '$URIPath'. Error: $_"
-            return
-        }
+        $isCqlEndpoint = $path -match '^/wiki/rest/api/(content/)?search/?$'
+        $isV2 = $path -like '/wiki/api/v2/*'
 
-        # --- spaceKey / spaceId handling for v2 pages ---
-        if ($UsingV2Pages -and $Query.Count -gt 0) {
-            if ($Query.ContainsKey('spaceKey')) {
-                $spaceKeyVal = $Query.spaceKey
-                if ($spaceKeyVal -match '^\d+$') {
-                    Write-Verbose "spaceKey value '$spaceKeyVal' numeric; treating as spaceId."
-                    $Query.Remove('spaceKey') | Out-Null
-                    $Query.spaceId = $spaceKeyVal
-                } elseif ($spaceKeyVal) {
-                    Write-Verbose "Resolving spaceKey '$spaceKeyVal' to spaceId (v2)."
-                    try {
-                        $spaceLookup = Invoke-ConfluenceRequest -Method GET -URIPath "/wiki/api/v2/spaces" -Query @{ keys = $spaceKeyVal } -MaxQueryPages 1 -RawPath -ErrorAction Stop
-                        $resolvedSpaceId = ($spaceLookup.Results | Where-Object { $_.key -eq $spaceKeyVal }).id
-                        if ($resolvedSpaceId) {
-                            Write-Verbose "spaceKey '$spaceKeyVal' resolved to spaceId '$resolvedSpaceId'."
-                            $Query.Remove('spaceKey') | Out-Null
-                            $Query.spaceId = $resolvedSpaceId
-                        } else {
-                            Write-Warning "spaceKey '$spaceKeyVal' could not be resolved; leaving spaceKey parameter."
-                        }
-                    } catch {
-                        Write-Warning "Failed to resolve spaceKey '$spaceKeyVal' to spaceId. Error: $_"
-                    }
+        $spaceValue = $null
+        if ($queryValues.ContainsKey('spaceKey') -and ($isCqlEndpoint -or $isV2)) {
+            $spaceValue = "$($queryValues['spaceKey'])"
+            $queryValues.Remove('spaceKey')
+        }
+        if ($isV2 -and $queryValues.ContainsKey('spaceId')) {
+            $spaceValue = "$($queryValues['spaceId'])"
+            $queryValues.Remove('spaceId')
+        }
+        if (-not [string]::IsNullOrWhiteSpace($spaceValue)) {
+            if ($isCqlEndpoint) {
+                if ($spaceValue -match '^\d+$') { $cqlClauses.Add("space.id = $spaceValue") }
+                else { $cqlClauses.Add('space = ' + (ConvertTo-ConfluenceCqlString -Value $spaceValue)) }
+            }
+            else {
+                try {
+                    $queryValues['space-id'] = Resolve-ConfluenceSpaceId -Space $spaceValue -ErrorAction Stop
+                }
+                catch {
+                    Write-Error "Could not resolve space '$spaceValue' to a space ID; no request was sent. $($_.Exception.Message)"
+                    return
                 }
             }
         }
 
-        # --- Build query string / CQL (reworked) ---
-        $QueryParts = @()
-        if ($Query.Count -gt 0) {
+        if (-not [string]::IsNullOrWhiteSpace($Search)) {
+            $operator = if ($Search -match '[\*\?]') { '~' } else { '=' }
+            $cqlClauses.Add("title $operator " + (ConvertTo-ConfluenceCqlString -Value $Search))
+        }
+        if ($cqlClauses.Count -gt 0) {
+            if ($queryValues.ContainsKey('cql') -and $queryValues['cql']) { $cqlClauses.Insert(0, "($($queryValues['cql']))") }
+            $queryValues['cql'] = $cqlClauses -join ' AND '
+            Write-Verbose "CQL: $($queryValues['cql'])"
+        }
+
+        # --- Endpoint ---
+        $baseUrl = "$($context.ConnectionBaseURL)".TrimEnd('/')
+        $endpoint = $baseUrl + $path
+        if ($queryValues.Count -gt 0) {
             # get_Keys(): a query parameter named "keys" would otherwise hide the Keys property
-            $queryKeys = @($Query.get_Keys())
-            Write-Verbose ("Processing query hashtable keys: {0}" -f ($queryKeys -join ', '))
-            foreach ($k in $queryKeys) {
-                $QueryParts += ("{0}={1}" -f (ConvertTo-UrlEncodedValue $k), (ConvertTo-UrlEncodedValue ([string]$Query[$k])))
+            $queryParts = foreach ($key in (@($queryValues.get_Keys()) | Sort-Object)) {
+                '{0}={1}' -f [System.Net.WebUtility]::UrlEncode($key), [System.Net.WebUtility]::UrlEncode([string]$queryValues[$key])
             }
+            $endpoint = $endpoint + '?' + ($queryParts -join '&')
         }
-        if ([string]::IsNullOrWhiteSpace($Search) -eq $false) {
-            $HasWild = $Search -match '[\*\?]'
-            $CqlOperator = $(if ($HasWild) { "~" } else { "=" })
-            $EscapedSearch = $Search.Replace('"', '\"')
-            $Cql = "title $CqlOperator `"$EscapedSearch`""
-            Write-Verbose "Generated CQL: $Cql"
-            $QueryParts += ("cql={0}" -f (ConvertTo-UrlEncodedValue $Cql))
-        }
-
-        # Deterministic final endpoint assembly
-        $Endpoint = $EndpointBase
-        if (-not $Endpoint) {
-            Write-Verbose "EndpointBase empty; reconstructing from BaseUriString + URIPathNormalized."
-            $EndpointBase = "$BaseUriString$URIPathNormalized"
-            $Endpoint = $EndpointBase
-        }
-
-        if ($QueryParts.Count -gt 0) {
-            $queryString = ($QueryParts -join '&')
-            $Endpoint = "$EndpointBase`?$queryString"
-            Write-Verbose "Full request URI: $Endpoint"
-        } else {
-            Write-Verbose "Full request URI (no query params): $Endpoint"
-        }
-
-        # Repair safeguard: if scheme missing (symptom previously seen)
-        if ($Endpoint -notmatch '^[a-zA-Z][a-zA-Z0-9+\-.]*://') {
-            Write-Warning "Endpoint lost base scheme/header. Repairing using EndpointBase."
-            if ($Endpoint -match '=') {
-                $Endpoint = "$EndpointBase`?" + $Endpoint.TrimStart('?')
-            } else {
-                $Endpoint = $EndpointBase
-            }
-            Write-Verbose "Repaired full request URI: $Endpoint"
-        }
-
-        # Final validation
-        $finalUriObj = $null
-        if (-not [System.Uri]::TryCreate($Endpoint, [System.UriKind]::Absolute, [ref]$finalUriObj)) {
-            Write-Error "Final endpoint URI invalid. Endpoint='$Endpoint' BaseUriString='$BaseUriString' URIPathNormalized='$URIPathNormalized' QueryPartsCount=$($QueryParts.Count)"
+        $baseUri = $null
+        $endpointUri = $null
+        if (-not [System.Uri]::TryCreate($baseUrl, [System.UriKind]::Absolute, [ref]$baseUri) -or
+            -not [System.Uri]::TryCreate($endpoint, [System.UriKind]::Absolute, [ref]$endpointUri)) {
+            Write-Error "The request URI '$endpoint' is not valid."
             return
         }
-        Write-Verbose "Validated endpoint URI: $($finalUriObj.AbsoluteUri)"
-
 
         # --- Send the request(s) ---
-        $OutputObject = [pscustomobject]@{ Results = @(); MultiPage = $false }
-        $QueryPageCount = 0
-        $CurrentEndpoint = $Endpoint
-        Write-Verbose "Starting request loop. MaxQueryPages=$MaxQueryPages Method=$Method"
+        $results = New-Object -TypeName System.Collections.Generic.List[object]
+        $multiPage = $false
+        $pageCount = 0
+        $currentEndpoint = $endpoint
         do {
-            Write-Verbose ('[Page {0}] {1} {2}' -f ($QueryPageCount + 1), $Method.ToUpper(), $CurrentEndpoint)
-            $requestParams = @{
-                Uri    = $CurrentEndpoint
-                Method = $Method.ToUpper()
-            }
+            Write-Verbose ('[Page {0}] {1} {2}' -f ($pageCount + 1), $Method, $currentEndpoint)
+            $requestParams = @{ Uri = $currentEndpoint; Method = $Method }
             if ($Body) { $requestParams.Body = $Body }
             try {
-                $Response = Invoke-ConfluenceHttpRequest @requestParams -ErrorAction Stop
+                $response = Invoke-ConfluenceHttpRequest @requestParams -ErrorAction Stop
             }
             catch {
-                Write-Error "Request to $CurrentEndpoint failed. $($_.Exception.Message)"
+                Write-Error "Request to $currentEndpoint failed. $($_.Exception.Message)"
                 return
             }
 
-            if ($Response.StatusCode -lt 200 -or $Response.StatusCode -gt 299) {
-                $Errors = $null
+            if ($response.StatusCode -lt 200 -or $response.StatusCode -gt 299) {
+                $errorText = $null
                 try {
-                    $errContent = $Response.Content | ConvertFrom-Json -ErrorAction Stop
-                    $Errors = (@($errContent.errors | ForEach-Object { $_.title }) + @($errContent.message) | Where-Object { $_ }) -join '; '
+                    $errorContent = $response.Content | ConvertFrom-Json -ErrorAction Stop
+                    $errorText = (@($errorContent.errors | ForEach-Object { $_.title }) + @($errorContent.message) | Where-Object { $_ }) -join '; '
                 }
                 catch {
                     Write-Verbose 'The error response body is not JSON.'
                 }
-                Write-Error "Failed request. Status: $($Response.StatusCode) $($Response.StatusDescription) Errors: $Errors URL: $CurrentEndpoint"
+                Write-Error "Failed request. Status: $($response.StatusCode) $($response.StatusDescription) Errors: $errorText URL: $currentEndpoint"
                 return
             }
 
-            $ResponsePayload = $null
-            if (-not [string]::IsNullOrWhiteSpace($Response.Content)) {
+            $payload = $null
+            if (-not [string]::IsNullOrWhiteSpace($response.Content)) {
                 try {
-                    $ResponsePayload = $Response.Content | ConvertFrom-Json -ErrorAction Stop
+                    $payload = $response.Content | ConvertFrom-Json -ErrorAction Stop
                 }
                 catch {
-                    Write-Error "Failed to parse JSON response from $CurrentEndpoint. $_"
+                    Write-Error "Failed to parse JSON response from $currentEndpoint. $_"
                     return
                 }
             }
-            else {
-                Write-Verbose "Empty response body (status $($Response.StatusCode))."
-            }
 
-            $NextLink = $null
-            if ($null -ne $ResponsePayload) {
-                if ($ResponsePayload.PSObject.Properties.Name -contains 'results') {
-                    $OutputObject.Results += $ResponsePayload.results
-                    $OutputObject.MultiPage = $true
+            $nextLink = $null
+            if ($null -ne $payload) {
+                $propertyNames = @($payload.PSObject.Properties.Name)
+                if ($propertyNames -contains 'results') {
+                    foreach ($item in @($payload.results)) { if ($null -ne $item) { $results.Add($item) } }
+                    $multiPage = $true
+                }
+                elseif ($payload -is [array]) {
+                    foreach ($item in $payload) { $results.Add($item) }
                 }
                 else {
-                    $OutputObject.Results += $ResponsePayload
+                    $results.Add($payload)
                 }
-
-                if ($ResponsePayload.PSObject.Properties.Name -contains '_links') {
-                    $linksObj = $ResponsePayload._links
-                    if ($linksObj -and ($linksObj.PSObject.Properties.Name -contains 'next')) {
-                        $NextLink = $linksObj.next
-                    }
-                }
-                if (-not $NextLink -and $ResponsePayload.PSObject.Properties.Name -contains 'links') {
-                    $linksObj = $ResponsePayload.links
-                    if ($linksObj -and ($linksObj.PSObject.Properties.Name -contains 'next')) {
-                        $NextLink = $linksObj.next
+                foreach ($linkProperty in @('_links', 'links')) {
+                    if (-not $nextLink -and $propertyNames -contains $linkProperty -and $payload.$linkProperty -and
+                        @($payload.$linkProperty.PSObject.Properties.Name) -contains 'next') {
+                        $nextLink = [string]$payload.$linkProperty.next
                     }
                 }
             }
+            $pageCount++
 
-            $CurrentEndpoint = $null
-            if ($NextLink) {
-                if ($NextLink -match '^[a-z]+://') {
-                    $nextUriObj = $null
-                    if ([System.Uri]::TryCreate($NextLink, [System.UriKind]::Absolute, [ref]$nextUriObj) -and $nextUriObj.Scheme -eq 'https' -and $nextUriObj.Authority -eq $baseUriObj.Authority) {
-                        $CurrentEndpoint = $NextLink
+            $currentEndpoint = $null
+            if ($nextLink) {
+                if ($nextLink -match '^[a-z][a-z0-9+.-]*://') {
+                    $nextUri = $null
+                    if ([System.Uri]::TryCreate($nextLink, [System.UriKind]::Absolute, [ref]$nextUri) -and $nextUri.Scheme -eq 'https' -and $nextUri.Authority -eq $baseUri.Authority) {
+                        $currentEndpoint = $nextLink
                     }
                     else {
                         Write-Warning 'Ignoring a pagination link that points outside the Confluence site in the context.'
                     }
                 }
                 else {
-                    if (-not $NextLink.StartsWith('/')) { $NextLink = "/$NextLink" }
+                    if (-not $nextLink.StartsWith('/')) { $nextLink = "/$nextLink" }
                     # v2 links are relative to the site root, v1 links to the /wiki context path
-                    if ($NextLink -notlike '/wiki/*' -and $BaseUriString -notmatch '/wiki$') { $NextLink = "/wiki$NextLink" }
-                    $CurrentEndpoint = $BaseUriString.TrimEnd('/') + $NextLink
+                    if ($nextLink -notlike '/wiki/*') { $nextLink = "/wiki$nextLink" }
+                    $currentEndpoint = $baseUrl + $nextLink
                 }
-                if ($CurrentEndpoint) { Write-Verbose "Detected next page link: $CurrentEndpoint" }
-            }
-            else {
-                Write-Verbose 'No further pagination link found.'
             }
 
-            $QueryPageCount++
-            if ($QueryPageCount -ge $MaxQueryPages) {
-                Write-Verbose 'Maximum query page count reached. Exiting loop.'
+            if ($Method -ne 'GET' -or $null -eq $currentEndpoint) { break }
+            if (-not $All -and $pageCount -ge $MaxQueryPages) {
+                Write-Warning "Stopped after $pageCount result page(s) (-MaxQueryPages $MaxQueryPages); more results are available. Use -All or a higher -MaxQueryPages to get them."
                 break
             }
-        } while ($null -ne $CurrentEndpoint -and $Method -eq 'GET')
+        } while ($true)
 
-        Write-Verbose ('Completed request. Pages retrieved: {0}. Total result objects collected: {1}' -f $QueryPageCount, @($OutputObject.Results).Count)
-        return $OutputObject
+        Write-Verbose ('Completed request. Pages retrieved: {0}. Results: {1}' -f $pageCount, $results.Count)
+        return [pscustomobject]@{
+            Results   = $results.ToArray()
+            MultiPage = $multiPage
+        }
     }
     catch {
         $telemetryFailed = $true
