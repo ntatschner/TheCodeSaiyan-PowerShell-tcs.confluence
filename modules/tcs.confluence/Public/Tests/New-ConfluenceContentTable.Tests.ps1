@@ -74,6 +74,57 @@ Describe 'New-ConfluenceContentTable' {
         $html | Should -Match "<a href='https://example.com'>https://example.com</a>"
     }
 
+    It 'Escapes header names and cell values' {
+        $html = New-ConfluenceContentTable -TableData @([pscustomobject]@{ 'A&B' = '<b>x</b>'; Note = 'Q&A' })
+        $html | Should -Match '>A&amp;B</th>'
+        $html | Should -Match '<span>&lt;b&gt;x&lt;/b&gt;</span>'
+        $html | Should -Match '>Q&amp;A</td>'
+    }
+
+    It 'Inserts cell values unchanged with -Raw' {
+        $status = New-ConfluenceContentStatus -Text 'OK' -Colour Green
+        $html = New-ConfluenceContentTable -TableData @([pscustomobject]@{ Name = 'web'; State = $status }) -Raw
+        $html | Should -Match ([regex]::Escape("<td style='text-align: Left;'>$status</td>"))
+    }
+
+    It 'Does not escape a nested table twice' {
+        $html = New-ConfluenceContentTable -TableData @([pscustomobject]@{ Name = 'x&y'; Detail = [pscustomobject]@{ A = 'a&b'; B = 2 } })
+        $html | Should -Match '<td style=''text-align: Left;''><table'
+        $html | Should -Match '>a&amp;b<'
+        $html | Should -Not -Match '&amp;amp;|&lt;table'
+    }
+
+    It 'Does not link file names or bare e-mail addresses' {
+        $html = New-ConfluenceContentTable -TableData @([pscustomobject]@{ Name = 'x'; File = 'report.pdf'; Mail = 'me@contoso.com'; Site = 'www.contoso.com' })
+        $html | Should -Not -Match '<a '
+        $html | Should -Match '>report.pdf</td>'
+        $html | Should -Match '>me@contoso.com</td>'
+    }
+
+    It 'Links mailto addresses' {
+        New-ConfluenceContentTable -TableData @([pscustomobject]@{ Name = 'x'; Mail = 'mailto:me@contoso.com' }) |
+            Should -Match "<a href='mailto:me@contoso.com'>mailto:me@contoso.com</a>"
+    }
+
+    It 'Accepts hashtable rows' {
+        $html = New-ConfluenceContentTable -TableData @(@{ Name = 'a' }, @{ Name = 'b' })
+        $html | Should -Match '<th [^>]*>Name</th>'
+        $html | Should -Match '<span>a</span>'
+        $html | Should -Match '<span>b</span>'
+    }
+
+    It 'Keeps the column order of ordered dictionaries' {
+        $html = New-ConfluenceContentTable -TableData @([ordered]@{ Zeta = 1; Alpha = 2 }, [ordered]@{ Zeta = 3; Alpha = 4 })
+        $html | Should -Match "scope='col'>Zeta</th><th [^>]*>Alpha</th>"
+        $html | Should -Match '<span>1</span></td><td [^>]*>2</td>'
+    }
+
+    It 'Reports an error for dictionary rows with different keys' {
+        $result = New-ConfluenceContentTable -TableData @(@{ A = 1 }, @{ B = 1 }) -ErrorAction SilentlyContinue -ErrorVariable tableError
+        $result | Should -BeNullOrEmpty
+        $tableError | Should -Not -BeNullOrEmpty
+    }
+
     It 'Returns an empty string, and only that, for an empty collection' {
         $result = @(New-ConfluenceContentTable -TableData @())
         $result.Count | Should -Be 1

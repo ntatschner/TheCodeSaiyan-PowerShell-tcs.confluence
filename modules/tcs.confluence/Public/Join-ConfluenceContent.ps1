@@ -12,7 +12,8 @@ function Join-ConfluenceContent {
 
     .PARAMETER Separator
         The separator between blocks: NewLine (<br />, default), HorizontalRule (<hr />),
-        Space (&nbsp;) or Tab (&emsp;).
+        Space (&#160;, a non-breaking space) or Tab (&#8195;, an em space). Numeric character
+        references are used so the result is well-formed XML.
 
     .EXAMPLE
         Join-ConfluenceContent -ContentBlocks (New-ConfluenceContentHeader -Header 'Intro' -Level 1), '<p>Text</p>' -Separator HorizontalRule
@@ -46,8 +47,8 @@ function Join-ConfluenceContent {
         $separatorText = switch ($Separator) {
             'HorizontalRule' { '<hr />' }
             'NewLine' { '<br />' }
-            'Space' { '&nbsp;' }
-            'Tab' { '&emsp;' }
+            'Space' { '&#160;' }
+            'Tab' { '&#8195;' }
         }
 
         return ($ContentBlocks -join $separatorText)

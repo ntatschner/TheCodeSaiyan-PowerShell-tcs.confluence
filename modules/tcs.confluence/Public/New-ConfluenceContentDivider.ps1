@@ -4,8 +4,8 @@ function New-ConfluenceContentDivider {
         Creates a divider (horizontal rule or blank paragraph) for a Confluence page.
 
     .DESCRIPTION
-        New-ConfluenceContentDivider returns an <hr> element, optionally with a style class, or an empty
-        paragraph for vertical space.
+        New-ConfluenceContentDivider returns a self-closed <hr/> element (storage format is XHTML),
+        optionally with a style class, or an empty paragraph for vertical space.
 
     .PARAMETER Type
         The divider type: line (default), space, default, dashed, dotted, double or gradient.
@@ -13,7 +13,7 @@ function New-ConfluenceContentDivider {
     .EXAMPLE
         New-ConfluenceContentDivider -Type space
 
-        Returns <p>&nbsp;</p>.
+        Returns <p>&#160;</p> (a non-breaking space).
 
     .OUTPUTS
         System.String
@@ -38,13 +38,13 @@ function New-ConfluenceContentDivider {
     $telemetryFailed = $false
     try {
         $Divider = @{
-            line     = '<hr>'
-            space    = '<p>&nbsp;</p>'
-            default  = "<hr class='default'>"
-            dashed   = "<hr class='dashed'>"
-            dotted   = "<hr class='dotted'>"
-            double   = "<hr class='double'>"
-            gradient = "<hr class='gradient'>"
+            line     = '<hr/>'
+            space    = '<p>&#160;</p>'
+            default  = "<hr class='default'/>"
+            dashed   = "<hr class='dashed'/>"
+            dotted   = "<hr class='dotted'/>"
+            double   = "<hr class='double'/>"
+            gradient = "<hr class='gradient'/>"
         }
         return $Divider[$Type]
     }
