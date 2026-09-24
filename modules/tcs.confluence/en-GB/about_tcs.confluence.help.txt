@@ -1,148 +1,52 @@
-TOPIC
+﻿TOPIC
     about_tcs.confluence
 
+    ABOUT TOPIC NOTE:
+    The first header of the about topic should be the topic name.
+    The second header contains the lookup name used by the help system.
+    
+    IE:
+    # Some Help Topic Name
+    ## SomeHelpTopicFileName
+    
+    This will be transformed into the text file
+    as `about_SomeHelpTopicFileName`.
+    Do not include file extensions.
+    The second header should have no spaces.
+
 SHORT DESCRIPTION
-    Work with Confluence Cloud pages and spaces, and build Confluence page content.
+    {{ Short Description Placeholder }}
+
+    ABOUT TOPIC NOTE:
+    About topics can be no longer than 80 characters wide when rendered to text.
+    Any topics greater than 80 characters will be automatically wrapped.
+    The generated about topic will be encoded UTF-8.
 
 LONG DESCRIPTION
-    tcs.confluence is part of the TheCodeSaiyan PowerShell suite and needs
-    tcs.core 0.3.0 or later. It has two groups of commands:
+    {{ Long Description Placeholder }}
 
-    - REST commands that read, create, update and delete Confluence Cloud
-      pages and read spaces. They use the site and credential set with
-      Set-ConfluenceContext for the current session.
-    - Content builders that return Confluence storage-format (XHTML) text for
-      page bodies. They need no connection.
-
-    Set-ConfluenceContext keeps the credential in memory only, as a
-    PSCredential. It is never written to disk, never returned by
-    Get-ConfluenceContext and never written to the verbose, warning or error
-    streams. Only HTTPS URLs are accepted.
-
-    The module runs on Windows PowerShell 5.1 and PowerShell 7 on Windows,
-    Linux and macOS.
-
-COMMANDS
-    Connection
-        Set-ConfluenceContext           Sets the Confluence site and credential
-                                        used by the other commands.
-        Get-ConfluenceContext           Returns the current connection, without
-                                        the credential.
-        Invoke-ConfluenceRequest        Sends a request to the Confluence REST
-                                        API (endpoint building, CQL search,
-                                        spaceKey resolution and pagination).
-
-    Pages and spaces
-        Get-ConfluencePage              Gets pages by ID, by space or by title.
-        Get-ConfluencePageContent       Gets pages including their body in the
-                                        requested format.
-        Get-ConfluenceSpace             Gets spaces, optionally filtered by name
-                                        (alias Get-ConfluenceSpaces).
-        New-ConfluencePage              Creates a page, or with -Force updates
-                                        the page with the same title.
-        Update-ConfluencePage           Replaces the title and body of a page.
-        Remove-ConfluencePage           Deletes a page.
-        Remove-DuplicateConfluencePage  Removes duplicate pages that share a
-                                        title and parent, keeping one (alias
-                                        Remove-DuplicateConfluencePages).
-
-    Content builders
-        New-ConfluenceContentHeader     Creates a heading (h1 to h6).
-        New-ConfluenceContentTable      Creates a table from a collection of
-                                        objects.
-        New-HtmlTable                   Creates an HTML table, or merges data
-                                        into an existing HTML table.
-        Get-HtmlTableRowData            Extracts the rows of an HTML table into
-                                        objects.
-        New-ConfluenceContentCodeBlock  Creates a code block macro.
-        New-ConfluenceContentTOC        Creates a table of contents macro.
-        New-ConfluenceContentInfo       Creates an info, tip, note, warning or
-                                        error message block.
-        New-ConfluenceContentLink       Creates a hyperlink, or turns every URL
-                                        in a block of text into a hyperlink.
-        New-ConfluenceContentInternalLink
-                                        Creates a link to a Confluence page,
-                                        optionally to a heading on that page.
-        New-ConfluenceContentDivider    Creates a horizontal rule or a blank
-                                        paragraph.
-        New-ConfluencePageLayout        Creates a page layout section with one
-                                        to three columns.
-        Join-ConfluenceContent          Joins blocks of content with a
-                                        separator.
-        ConvertTo-ConfluenceHTML        Converts simple Markdown to HTML.
-
-    Every command has full help, for example: Get-Help New-ConfluencePage -Full
-
-CONFIGURATION
-    Settings are managed by tcs.core. The settings file for this module is:
-
-        <ApplicationData>/PowerShell/Config/tcs.confluence/Module.Config.json
-
-    It is created with defaults the first time the module loads. Read it with
-    Get-ModuleConfig and change it with Set-ModuleConfig:
-
-        UpdateWarning             Warn on import when a newer version is in
-                                  the PowerShell Gallery (default $true).
-        UpdateCheckIntervalHours  Hours between update checks (default 24).
-        Telemetry                 Send anonymous usage telemetry
-                                  (default $true).
-
-    The update check never blocks import.
-
-ENVIRONMENT VARIABLES
-    TCS_TELEMETRY_OPTOUT=1   Turns telemetry off for all tcs modules.
-    TCS_SKIP_UPDATE_CHECK=1  Turns the gallery update check off.
-    TCS_CONFIG_ROOT          Moves the settings folder.
-
-TELEMETRY
-    tcs.confluence sends anonymous usage events through tcs.core
-    Invoke-TelemetryCollection: one when the module loads and one each time an
-    exported command runs (command name, duration, success, exception type,
-    PowerShell and OS version and a random installation ID). No user, machine,
-    path or error text is sent, and no command arguments, Confluence URLs,
-    page content or credentials. Nothing is sent until a TelemetryUri is
-    configured.
-
-    Turn it off for this module with:
-
-        Set-ModuleConfig -ModuleName tcs.confluence -Telemetry $false
-
-    or for every tcs module with the environment variable
-    TCS_TELEMETRY_OPTOUT=1.
+Optional Subtopics
+    {{ Optional Subtopic Placeholder }}
 
 EXAMPLES
-    Connect for the current session:
+    {{ Code or descriptive examples of how to leverage the functions described.
+    }}
 
-        Set-ConfluenceContext -ConfluenceUrl 'https://contoso.atlassian.net' -Credential (Get-Credential)
+NOTE
+    {{ Note Placeholder - Additional information that a user needs to know.}}
 
-    Build a page body and create the page, or update it if it exists:
-
-        $body = Join-ConfluenceContent -Separator HorizontalRule -ContentBlocks @(
-            New-ConfluenceContentTOC
-            New-ConfluenceContentHeader -Header 'Services' -Level 2
-            New-ConfluenceContentCodeBlock -Content 'Get-Service' -Language powershell
-        )
-        New-ConfluencePage -SpaceKey 123456 -ParentId 654321 -Title 'Service report' -Status current -Content $body -Force
-
-    Find pages by title with a wildcard:
-
-        (Get-ConfluencePage -SpaceKey ENG -Search 'Service*').Results | Select-Object id, title
-
-    Turn off update warnings for tcs.confluence:
-
-        Set-ModuleConfig -ModuleName tcs.confluence -UpdateWarning $false
+TROUBLESHOOTING NOTE
+    {{ Troubleshooting Placeholder - Warns users of bugs}}
+    {{ Explains behavior that is likely to change with fixes }}
 
 SEE ALSO
-    about_tcs.core
-    Set-ConfluenceContext
-    Get-ConfluencePage
-    New-ConfluencePage
-    Get-ModuleConfig
-    Set-ModuleConfig
-    https://github.com/ntatschner/TheCodeSaiyan-PowerShell-tcs.confluence
+    {{ See also placeholder }}
+    {{ You can also list related articles, blogs, and video URLs. }}
 
 KEYWORDS
-    tcs
-    TheCodeSaiyan
-    Confluence
-    Atlassian
+    {{List alternate names or titles for this topic that readers might use.}}
+    - {{ Keyword Placeholder }}
+    - {{ Keyword Placeholder }}
+    - {{ Keyword Placeholder }}
+    - {{ Keyword Placeholder }}
+
