@@ -10,7 +10,7 @@ function New-ConfluenceContentTable {
         their keys are the columns.
 
         Cell values that are collections, dictionaries or objects with several properties are rendered
-        as nested tables. In the data cells (all but the first column) addresses with a scheme
+        as nested tables, up to three levels deep (deeper values are shown as text). In the data cells (all but the first column) addresses with a scheme
         (http://, https:// or mailto:) are converted to links; file names such as report.pdf and bare
         e-mail addresses are not. Header names and cell values are escaped, so the result is always
         well-formed storage format; use -Raw to insert cell values that already are storage-format
@@ -202,15 +202,26 @@ function New-ConfluenceContentTable {
             param($Value, [bool]$DetectLinks)
             if ($null -eq $Value) { return '' }
             $isScalar = ($Value -is [string]) -or ($Value -is [ValueType])
-            if (-not $isScalar) {
+            # Nested tables stop at three levels, so self-referencing objects cannot recurse forever
+            if (-not $isScalar -and $script:ConfluenceTableNesting -lt 3) {
+                $nestedRows = $null
                 if ($Value -is [System.Collections.IDictionary]) {
-                    return (New-ConfluenceContentTable -TableData @(, $Value) -Raw:$Raw)
+                    $nestedRows = @(, $Value)
                 }
-                if ($Value -is [System.Collections.IEnumerable] -and @($Value).Count -ge 1) {
-                    return (New-ConfluenceContentTable -TableData @($Value) -Raw:$Raw)
+                elseif ($Value -is [System.Collections.IEnumerable] -and @($Value).Count -ge 1) {
+                    $nestedRows = @($Value)
                 }
-                if (@($Value.PSObject.Properties).Count -gt 1) {
-                    return (New-ConfluenceContentTable -TableData @($Value) -Raw:$Raw)
+                elseif (@($Value.PSObject.Properties).Count -gt 1) {
+                    $nestedRows = @($Value)
+                }
+                if ($null -ne $nestedRows) {
+                    $script:ConfluenceTableNesting++
+                    try {
+                        return (New-ConfluenceContentTable -TableData $nestedRows -Raw:$Raw)
+                    }
+                    finally {
+                        $script:ConfluenceTableNesting--
+                    }
                 }
             }
             $text = $Value.ToString()

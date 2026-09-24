@@ -19,7 +19,7 @@ function ConvertTo-ConfluenceXmlText {
     )
 
     if ([string]::IsNullOrEmpty($Text)) { return '' }
-    $clean = [regex]::Replace($Text, '[\x00-\x08\x0B\x0C\x0E-\x1F￾￿]', '')
+    $clean = [regex]::Replace($Text, '[\x00-\x08\x0B\x0C\x0E-\x1F\uFFFE\uFFFF]', '')
     $escaped = $clean.Replace('&', '&amp;').Replace('<', '&lt;').Replace('>', '&gt;')
     if ($Attribute) {
         $escaped = $escaped.Replace('"', '&quot;').Replace("'", '&#39;')

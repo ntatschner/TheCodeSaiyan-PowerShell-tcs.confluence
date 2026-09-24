@@ -125,6 +125,13 @@ Describe 'New-ConfluenceContentTable' {
         $tableError | Should -Not -BeNullOrEmpty
     }
 
+    It 'Stops nesting tables for self-referencing objects' {
+        $directory = Get-Item -LiteralPath $TestDrive
+        $html = New-ConfluenceContentTable -TableData @([pscustomobject]@{ Name = 'x'; Folder = $directory.Root })
+        $html | Should -Match '^<table'
+        ([regex]::Matches($html, '<table')).Count | Should -BeLessThan 200
+    }
+
     It 'Returns an empty string, and only that, for an empty collection' {
         $result = @(New-ConfluenceContentTable -TableData @())
         $result.Count | Should -Be 1
