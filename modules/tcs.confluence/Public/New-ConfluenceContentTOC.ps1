@@ -55,31 +55,51 @@ function New-ConfluenceContentTOC {
         [switch]$IncludeSectionNumbers
     )
 
-    if ($HeadersFromLevel -gt $HeadersToLevel) {
-        Write-Error "HeadersFromLevel ($HeadersFromLevel) must not be greater than HeadersToLevel ($HeadersToLevel)."
-        return
+    $TelemetryArgs = @{
+        ModuleName    = $MyInvocation.MyCommand.Module.Name
+        ModuleVersion = [string]$MyInvocation.MyCommand.Module.Version
+        CommandName   = $MyInvocation.MyCommand.Name
+        ExecutionID   = [guid]::NewGuid().ToString()
     }
+    Invoke-TelemetryCollection @TelemetryArgs -Stage Start -ClearTimer
+    $telemetryFailed = $false
+    try {
+        if ($HeadersFromLevel -gt $HeadersToLevel) {
+            Write-Error "HeadersFromLevel ($HeadersFromLevel) must not be greater than HeadersToLevel ($HeadersToLevel)."
+            return
+        }
 
-    # Confluence toc macro: type = list | flat, outline = section numbering, style = CSS list-style-type
-    $TypeValue = if ($HorizontalList) { 'flat' } else { 'list' }
-    $OutlineValue = if ($IncludeSectionNumbers) { 'true' } else { 'false' }
-    $StyleMap = @{
-        None   = 'none'
-        Bullet = 'disc'
-        Circle = 'circle'
-        Square = 'square'
-        Number = 'decimal'
-    }
+        # Confluence toc macro: type = list | flat, outline = section numbering, style = CSS list-style-type
+        $TypeValue = if ($HorizontalList) { 'flat' } else { 'list' }
+        $OutlineValue = if ($IncludeSectionNumbers) { 'true' } else { 'false' }
+        $StyleMap = @{
+            None   = 'none'
+            Bullet = 'disc'
+            Circle = 'circle'
+            Square = 'square'
+            Number = 'decimal'
+        }
 
-    $TOCMacro = "<ac:structured-macro ac:name='toc'>"
-    $TOCMacro += "<ac:parameter ac:name='maxLevel'>$HeadersToLevel</ac:parameter>"
-    $TOCMacro += "<ac:parameter ac:name='minLevel'>$HeadersFromLevel</ac:parameter>"
-    $TOCMacro += "<ac:parameter ac:name='type'>$TypeValue</ac:parameter>"
-    $TOCMacro += "<ac:parameter ac:name='outline'>$OutlineValue</ac:parameter>"
-    $TOCMacro += "<ac:parameter ac:name='printable'>true</ac:parameter>"
-    if ($StyleMap.ContainsKey($BulletPointStyle)) {
-        $TOCMacro += "<ac:parameter ac:name='style'>$($StyleMap[$BulletPointStyle])</ac:parameter>"
+        $TOCMacro = "<ac:structured-macro ac:name='toc'>"
+        $TOCMacro += "<ac:parameter ac:name='maxLevel'>$HeadersToLevel</ac:parameter>"
+        $TOCMacro += "<ac:parameter ac:name='minLevel'>$HeadersFromLevel</ac:parameter>"
+        $TOCMacro += "<ac:parameter ac:name='type'>$TypeValue</ac:parameter>"
+        $TOCMacro += "<ac:parameter ac:name='outline'>$OutlineValue</ac:parameter>"
+        $TOCMacro += "<ac:parameter ac:name='printable'>true</ac:parameter>"
+        if ($StyleMap.ContainsKey($BulletPointStyle)) {
+            $TOCMacro += "<ac:parameter ac:name='style'>$($StyleMap[$BulletPointStyle])</ac:parameter>"
+        }
+        $TOCMacro += '</ac:structured-macro>'
+        return $TOCMacro
     }
-    $TOCMacro += '</ac:structured-macro>'
-    return $TOCMacro
+    catch {
+        $telemetryFailed = $true
+        Invoke-TelemetryCollection @TelemetryArgs -Stage End -Failed $true -Exception $_
+        throw
+    }
+    finally {
+        if (-not $telemetryFailed) {
+            Invoke-TelemetryCollection @TelemetryArgs -Stage End
+        }
+    }
 }

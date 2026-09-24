@@ -42,7 +42,27 @@ function New-ConfluenceContentHeader {
         [string[]]$StringFormatting
     )
 
-    $open = Get-HtmlFormatTag -Format $StringFormatting
-    $close = Get-HtmlFormatTag -Format $StringFormatting -Close
-    return "<h$Level>$open$Header$close</h$Level>"
+    $TelemetryArgs = @{
+        ModuleName    = $MyInvocation.MyCommand.Module.Name
+        ModuleVersion = [string]$MyInvocation.MyCommand.Module.Version
+        CommandName   = $MyInvocation.MyCommand.Name
+        ExecutionID   = [guid]::NewGuid().ToString()
+    }
+    Invoke-TelemetryCollection @TelemetryArgs -Stage Start -ClearTimer
+    $telemetryFailed = $false
+    try {
+        $open = Get-HtmlFormatTag -Format $StringFormatting
+        $close = Get-HtmlFormatTag -Format $StringFormatting -Close
+        return "<h$Level>$open$Header$close</h$Level>"
+    }
+    catch {
+        $telemetryFailed = $true
+        Invoke-TelemetryCollection @TelemetryArgs -Stage End -Failed $true -Exception $_
+        throw
+    }
+    finally {
+        if (-not $telemetryFailed) {
+            Invoke-TelemetryCollection @TelemetryArgs -Stage End
+        }
+    }
 }

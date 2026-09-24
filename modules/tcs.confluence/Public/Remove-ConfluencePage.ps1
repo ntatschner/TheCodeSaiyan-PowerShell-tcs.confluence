@@ -31,15 +31,41 @@ function Remove-ConfluencePage {
         [string]$PageId
     )
 
+    begin {
+        $TelemetryArgs = @{
+            ModuleName    = $MyInvocation.MyCommand.Module.Name
+            ModuleVersion = [string]$MyInvocation.MyCommand.Module.Version
+            CommandName   = $MyInvocation.MyCommand.Name
+            ExecutionID   = [guid]::NewGuid().ToString()
+        }
+        Invoke-TelemetryCollection @TelemetryArgs -Stage Start -ClearTimer
+        $telemetryFailed = $false
+    }
+
     process {
-        if ($PSCmdlet.ShouldProcess("Confluence page $PageId", 'Remove')) {
-            try {
-                $null = Invoke-ConfluenceRequest -Method DELETE -Resource pages -Id $PageId -MaxQueryPages 1 -ErrorAction Stop
-                Write-Verbose "Removed page with ID $PageId."
+        try {
+            if ($PSCmdlet.ShouldProcess("Confluence page $PageId", 'Remove')) {
+                try {
+                    $null = Invoke-ConfluenceRequest -Method DELETE -Resource pages -Id $PageId -MaxQueryPages 1 -ErrorAction Stop
+                    Write-Verbose "Removed page with ID $PageId."
+                }
+                catch {
+                    Write-Error "Failed to remove page with ID $PageId. Error: $_"
+                }
             }
-            catch {
-                Write-Error "Failed to remove page with ID $PageId. Error: $_"
+        }
+        catch {
+            if (-not $telemetryFailed) {
+                $telemetryFailed = $true
+                Invoke-TelemetryCollection @TelemetryArgs -Stage End -Failed $true -Exception $_
             }
+            throw
+        }
+    }
+
+    end {
+        if (-not $telemetryFailed) {
+            Invoke-TelemetryCollection @TelemetryArgs -Stage End
         }
     }
 }

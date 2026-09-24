@@ -85,12 +85,27 @@ function Get-ConfluencePage {
         Write-Verbose ('Query parameters: {0}' -f (($queryParams.GetEnumerator() | ForEach-Object { "$($_.Key)=$($_.Value)" }) -join ', '))
     }
 
+    $TelemetryArgs = @{
+        ModuleName    = $MyInvocation.MyCommand.Module.Name
+        ModuleVersion = [string]$MyInvocation.MyCommand.Module.Version
+        CommandName   = $MyInvocation.MyCommand.Name
+        ExecutionID   = [guid]::NewGuid().ToString()
+    }
+    Invoke-TelemetryCollection @TelemetryArgs -Stage Start -ClearTimer
+    $telemetryFailed = $false
     try {
         $response = Invoke-ConfluenceRequest @requestParams -ErrorAction Stop
         if (-not $response.Results -or @($response.Results).Count -eq 0) { Write-Verbose 'No results returned.' }
         return $response
     }
     catch {
+        $telemetryFailed = $true
+        Invoke-TelemetryCollection @TelemetryArgs -Stage End -Failed $true -Exception $_
         Write-Error "Failed to retrieve page information. Error: $_"
+    }
+    finally {
+        if (-not $telemetryFailed) {
+            Invoke-TelemetryCollection @TelemetryArgs -Stage End
+        }
     }
 }

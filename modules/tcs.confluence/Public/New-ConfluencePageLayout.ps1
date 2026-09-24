@@ -94,23 +94,35 @@ function New-ConfluencePageLayout {
         return $paramDictionary
     }
 
-    process {
-        $layoutXml = "<ac:layout>`n"
-        $contentSections = 0
+    begin {
+        $TelemetryArgs = @{
+            ModuleName    = $MyInvocation.MyCommand.Module.Name
+            ModuleVersion = [string]$MyInvocation.MyCommand.Module.Version
+            CommandName   = $MyInvocation.MyCommand.Name
+            ExecutionID   = [guid]::NewGuid().ToString()
+        }
+        Invoke-TelemetryCollection @TelemetryArgs -Stage Start -ClearTimer
+        $telemetryFailed = $false
+    }
 
-        switch ($LayoutType) {
-            "single" {
-                $layoutXml += @"
+    process {
+        try {
+            $layoutXml = "<ac:layout>`n"
+            $contentSections = 0
+
+            switch ($LayoutType) {
+                "single" {
+                    $layoutXml += @"
   <ac:layout-section ac:type="single">
      <ac:layout-cell>
         $($PSCmdlet.MyInvocation.BoundParameters["SectionOne"])
      </ac:layout-cell>
   </ac:layout-section>
 "@
-                $contentSections = 1
-            }
-            "two_equal" {
-                $layoutXml += @"
+                    $contentSections = 1
+                }
+                "two_equal" {
+                    $layoutXml += @"
   <ac:layout-section ac:type="two_equal">
      <ac:layout-cell>
         $($PSCmdlet.MyInvocation.BoundParameters["SectionOne"])
@@ -120,10 +132,10 @@ function New-ConfluencePageLayout {
      </ac:layout-cell>
   </ac:layout-section>
 "@
-                $contentSections = 2
-            }
-            "two_left_sidebar" {
-                $layoutXml += @"
+                    $contentSections = 2
+                }
+                "two_left_sidebar" {
+                    $layoutXml += @"
   <ac:layout-section ac:type="two_left_sidebar">
      <ac:layout-cell>
         $($PSCmdlet.MyInvocation.BoundParameters["SectionOne"])
@@ -133,10 +145,10 @@ function New-ConfluencePageLayout {
      </ac:layout-cell>
   </ac:layout-section>
 "@
-                $contentSections = 2
-            }
-            "two_right_sidebar" {
-                $layoutXml += @"
+                    $contentSections = 2
+                }
+                "two_right_sidebar" {
+                    $layoutXml += @"
   <ac:layout-section ac:type="two_right_sidebar">
      <ac:layout-cell>
         $($PSCmdlet.MyInvocation.BoundParameters["SectionOne"])
@@ -146,10 +158,10 @@ function New-ConfluencePageLayout {
      </ac:layout-cell>
   </ac:layout-section>
 "@
-                $contentSections = 2
-            }
-            "three_equal" {
-                $layoutXml += @"
+                    $contentSections = 2
+                }
+                "three_equal" {
+                    $layoutXml += @"
   <ac:layout-section ac:type="three_equal">
      <ac:layout-cell>
         $($PSCmdlet.MyInvocation.BoundParameters["SectionOne"])
@@ -162,10 +174,10 @@ function New-ConfluencePageLayout {
      </ac:layout-cell>
   </ac:layout-section>
 "@
-                $contentSections = 3
-            }
-            "three_with_sidebars" {
-                $layoutXml += @"
+                    $contentSections = 3
+                }
+                "three_with_sidebars" {
+                    $layoutXml += @"
   <ac:layout-section ac:type="three_with_sidebars">
      <ac:layout-cell>
         $($PSCmdlet.MyInvocation.BoundParameters["SectionOne"])
@@ -178,16 +190,30 @@ function New-ConfluencePageLayout {
      </ac:layout-cell>
   </ac:layout-section>
 "@
-                $contentSections = 3
+                    $contentSections = 3
+                }
+            }
+
+            $layoutXml += "`n</ac:layout>"
+
+            return [pscustomobject]@{
+                LayoutType      = $LayoutType
+                LayoutXml       = $layoutXml
+                ContentSections = $contentSections
             }
         }
+        catch {
+            if (-not $telemetryFailed) {
+                $telemetryFailed = $true
+                Invoke-TelemetryCollection @TelemetryArgs -Stage End -Failed $true -Exception $_
+            }
+            throw
+        }
+    }
 
-        $layoutXml += "`n</ac:layout>"
-
-        return [pscustomobject]@{
-            LayoutType      = $LayoutType
-            LayoutXml       = $layoutXml
-            ContentSections = $contentSections
+    end {
+        if (-not $telemetryFailed) {
+            Invoke-TelemetryCollection @TelemetryArgs -Stage End
         }
     }
 }

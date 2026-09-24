@@ -34,12 +34,32 @@ function Join-ConfluenceContent {
         [string]$Separator = 'NewLine'
     )
 
-    $separatorText = switch ($Separator) {
-        'HorizontalRule' { '<hr />' }
-        'NewLine' { '<br />' }
-        'Space' { '&nbsp;' }
-        'Tab' { '&emsp;' }
+    $TelemetryArgs = @{
+        ModuleName    = $MyInvocation.MyCommand.Module.Name
+        ModuleVersion = [string]$MyInvocation.MyCommand.Module.Version
+        CommandName   = $MyInvocation.MyCommand.Name
+        ExecutionID   = [guid]::NewGuid().ToString()
     }
+    Invoke-TelemetryCollection @TelemetryArgs -Stage Start -ClearTimer
+    $telemetryFailed = $false
+    try {
+        $separatorText = switch ($Separator) {
+            'HorizontalRule' { '<hr />' }
+            'NewLine' { '<br />' }
+            'Space' { '&nbsp;' }
+            'Tab' { '&emsp;' }
+        }
 
-    return ($ContentBlocks -join $separatorText)
+        return ($ContentBlocks -join $separatorText)
+    }
+    catch {
+        $telemetryFailed = $true
+        Invoke-TelemetryCollection @TelemetryArgs -Stage End -Failed $true -Exception $_
+        throw
+    }
+    finally {
+        if (-not $telemetryFailed) {
+            Invoke-TelemetryCollection @TelemetryArgs -Stage End
+        }
+    }
 }

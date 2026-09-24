@@ -70,32 +70,52 @@ function Set-ConfluenceContext {
         [string]$ApiVersion = 'v2'
     )
 
-    # --- Normalise the base URL ---
-    $raw = $ConfluenceUrl.Trim().TrimEnd('/')
-    $normalized = ($raw -replace '(?i)/wiki/?(api/v2|rest/api)?$', '')
-    $apiSuffix = if ($ApiVersion -eq 'v1') { '/wiki/rest/api' } else { '/wiki/api/v2' }
-    $connectionUri = "$normalized$apiSuffix"
+    $TelemetryArgs = @{
+        ModuleName    = $MyInvocation.MyCommand.Module.Name
+        ModuleVersion = [string]$MyInvocation.MyCommand.Module.Version
+        CommandName   = $MyInvocation.MyCommand.Name
+        ExecutionID   = [guid]::NewGuid().ToString()
+    }
+    Invoke-TelemetryCollection @TelemetryArgs -Stage Start -ClearTimer
+    $telemetryFailed = $false
+    try {
+        # --- Normalise the base URL ---
+        $raw = $ConfluenceUrl.Trim().TrimEnd('/')
+        $normalized = ($raw -replace '(?i)/wiki/?(api/v2|rest/api)?$', '')
+        $apiSuffix = if ($ApiVersion -eq 'v1') { '/wiki/rest/api' } else { '/wiki/api/v2' }
+        $connectionUri = "$normalized$apiSuffix"
 
-    if ($PSCmdlet.ParameterSetName -eq 'Token') {
-        $secureToken = New-Object -TypeName System.Security.SecureString
-        foreach ($character in $PersonalAccessToken.ToCharArray()) {
-            $secureToken.AppendChar($character)
+        if ($PSCmdlet.ParameterSetName -eq 'Token') {
+            $secureToken = New-Object -TypeName System.Security.SecureString
+            foreach ($character in $PersonalAccessToken.ToCharArray()) {
+                $secureToken.AppendChar($character)
+            }
+            $secureToken.MakeReadOnly()
+            $Credential = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList $Username, $secureToken
         }
-        $secureToken.MakeReadOnly()
-        $Credential = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList $Username, $secureToken
-    }
 
-    if (-not $PSCmdlet.ShouldProcess($normalized, 'Set Confluence context')) {
-        return
-    }
+        if (-not $PSCmdlet.ShouldProcess($normalized, 'Set Confluence context')) {
+            return
+        }
 
-    $script:ConfluenceCredential = $Credential
-    $script:ConfluenceContext = [pscustomobject]@{
-        OriginalConnectionURL = $raw
-        ConnectionBaseURL     = $normalized
-        ConnectionURI         = $connectionUri
-        ApiVersion            = $ApiVersion
-        Username              = $Credential.UserName
+        $script:ConfluenceCredential = $Credential
+        $script:ConfluenceContext = [pscustomobject]@{
+            OriginalConnectionURL = $raw
+            ConnectionBaseURL     = $normalized
+            ConnectionURI         = $connectionUri
+            ApiVersion            = $ApiVersion
+            Username              = $Credential.UserName
+        }
+        Write-Verbose "Confluence context set. Base='$normalized' API='$apiSuffix' User='$($Credential.UserName)'"
     }
-    Write-Verbose "Confluence context set. Base='$normalized' API='$apiSuffix' User='$($Credential.UserName)'"
+    catch {
+        $telemetryFailed = $true
+        Invoke-TelemetryCollection @TelemetryArgs -Stage End -Failed $true -Exception $_
+        throw
+    }
+    finally {
+        if (-not $telemetryFailed) {
+            Invoke-TelemetryCollection @TelemetryArgs -Stage End
+        }
+    }
 }

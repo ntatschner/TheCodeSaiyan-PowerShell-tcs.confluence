@@ -1,3 +1,4 @@
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingWriteHost', '', Justification = 'Progress messages for the CI log; the script returns no output.')]
 param()
 
 $moduleName = 'tcs.confluence'
