@@ -1,4 +1,3 @@
-#Requires -Version 3.0
 function New-HtmlTable {
     <#
     .SYNOPSIS
@@ -12,8 +11,74 @@ function New-HtmlTable {
         within the existing <tbody> (overwriting existing styles), and appends new data rows (InputObject) also
         applying the -CellStyle. Potentially applies row merging relative to the last existing row.
 
+        Cell values are HTML-encoded unless -PreserveHtml is given.
+
+    .PARAMETER InputObject
+        The objects to add as rows. Accepts pipeline input.
+
+    .PARAMETER Properties
+        The properties to use as columns, in order. Defaults to the properties of the first object
+        (CreateNew) or the columns detected in the existing table (MergeExisting).
+
+    .PARAMETER Title
+        A caption for a new table.
+
+    .PARAMETER CssClass
+        The CSS class of a new table.
+
+    .PARAMETER Style
+        Inline styles for a new table, as a hashtable such as @{ width = '100%' }.
+
+    .PARAMETER HeaderStyle
+        Inline styles for the header cells of a new table.
+
+    .PARAMETER CellStyle
+        Inline styles for the data cells. With -MergeWithExisting the style is also applied to all
+        existing cells.
+
+    .PARAMETER MergeRows
+        Merge consecutive cells with equal values in -MergeColumns using rowspan.
+
+    .PARAMETER MergeColumns
+        The columns whose equal consecutive values are merged when -MergeRows is given.
+
+    .PARAMETER ExistingHtmlTable
+        The HTML of an existing table to append rows to.
+
+    .PARAMETER MergeWithExisting
+        Append the objects to -ExistingHtmlTable instead of creating a new table.
+
+    .PARAMETER NullDisplay
+        The text shown for null or empty values.
+
+    .PARAMETER UseNbspForEmpty
+        Show &nbsp; for null or empty values.
+
+    .PARAMETER PreserveHtml
+        Insert values without HTML-encoding them, so they may contain markup.
+
+    .EXAMPLE
+        Get-Process | Select-Object -First 5 Name, Id | New-HtmlTable -Title 'Processes' -Style @{ width = '100%' }
+
+        Creates a table with a caption from five process objects.
+
+    .EXAMPLE
+        $rows | New-HtmlTable -MergeRows -MergeColumns Region
+
+        Creates a table in which consecutive rows with the same Region share one Region cell.
+
+    .EXAMPLE
+        $newRows | New-HtmlTable -ExistingHtmlTable $existingHtml -MergeWithExisting
+
+        Appends the new rows to the body of an existing table.
+
+    .OUTPUTS
+        System.String
     #>
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '',
+        Justification = 'Only builds an HTML string in memory; nothing outside the session is changed.')]
     [CmdletBinding(DefaultParameterSetName = 'CreateNew')]
+    [OutputType([string])]
     param(
         [Parameter(ParameterSetName = 'CreateNew', Mandatory = $true, ValueFromPipeline = $true, Position = 0)]
         [Parameter(ParameterSetName = 'MergeExisting', Mandatory = $true, ValueFromPipeline = $true, Position = 0)]
@@ -74,7 +139,7 @@ function New-HtmlTable {
             if ($null -eq $StyleHashtable -or $StyleHashtable.Count -eq 0) { return "" }
             $styleParts = @()
             foreach ($key in ($StyleHashtable.Keys | Sort-Object)) {
-                $val = $StyleHashtable[$key] -replace '"',''
+                $val = $StyleHashtable[$key] -replace '"', ''
                 $styleParts += "${key}: $val;"
             }
             if ($styleParts.Count -eq 0) { return "" }
@@ -92,7 +157,8 @@ function New-HtmlTable {
             if ($null -eq $Value -or ($Value -is [string] -and [string]::IsNullOrEmpty($Value))) {
                 if ($UseNbspForEmpty) { return '&nbsp;' }
                 if ($NullDisplay) {
-                    return $PreserveHtml ? $NullDisplay : [System.Net.WebUtility]::HtmlEncode($NullDisplay)
+                    if ($PreserveHtml) { return $NullDisplay }
+                    return [System.Net.WebUtility]::HtmlEncode($NullDisplay)
                 }
                 return ''
             }
@@ -153,20 +219,20 @@ function New-HtmlTable {
                 foreach ($colName in $MergeColumns) {
                     $startRow = 0
                     while ($startRow -lt $Data.Count) {
-                        if (-not $cellAttributes.ContainsKey($startRow)){ $cellAttributes[$startRow] = @{} }
-                        if (-not $cellAttributes[$startRow].ContainsKey($colName)){ $cellAttributes[$startRow][$colName] = @{Rowspan=1;Skip=$false} }
+                        if (-not $cellAttributes.ContainsKey($startRow)) { $cellAttributes[$startRow] = @{} }
+                        if (-not $cellAttributes[$startRow].ContainsKey($colName)) { $cellAttributes[$startRow][$colName] = @{Rowspan = 1; Skip = $false } }
                         $spanCount = 1
                         for ($nextRow = $startRow + 1; $nextRow -lt $Data.Count; $nextRow++) {
                             $match = $true
-                            foreach($prevCol in $MergeColumns) {
+                            foreach ($prevCol in $MergeColumns) {
                                 $currentVal = $Data[$nextRow]."$prevCol"
                                 $startVal = $Data[$startRow]."$prevCol"
                                 if ("$currentVal" -ne "$startVal") { $match = $false; break }
                                 if ($prevCol -eq $colName) { break }
                             }
                             if ($match) {
-                                if(-not $cellAttributes.ContainsKey($nextRow)){$cellAttributes[$nextRow] = @{}}
-                                if(-not $cellAttributes[$nextRow].ContainsKey($colName)){$cellAttributes[$nextRow][$colName] = @{Rowspan=1;Skip=$false}}
+                                if (-not $cellAttributes.ContainsKey($nextRow)) { $cellAttributes[$nextRow] = @{} }
+                                if (-not $cellAttributes[$nextRow].ContainsKey($colName)) { $cellAttributes[$nextRow][$colName] = @{Rowspan = 1; Skip = $false } }
                                 $spanCount++
                                 $cellAttributes[$nextRow][$colName].Skip = $true
                             } else { break }
@@ -235,7 +301,7 @@ function New-HtmlTable {
                 $headerRowHtml = $headerMatch.Groups[1].Value
                 $thMatches = [regex]::Matches($headerRowHtml, '(?si)<th.*?>(.*?)</th>')
                 if ($thMatches.Count -gt 0) {
-                    $detectedProperties = $thMatches | ForEach-Object { $_.Groups[1].Value.Trim() -replace '<.*?>','' }
+                    $detectedProperties = $thMatches | ForEach-Object { $_.Groups[1].Value.Trim() -replace '<.*?>', '' }
                 } else { Write-Warning "Found <thead> but no <th> tags inside." }
             } else { Write-Error "Failed to parse headers (<thead>) from ExistingHtmlTable. Cannot merge."; return $null }
             if ($detectedProperties.Count -eq 0) { Write-Error "No columns detected from existing header. Cannot merge."; return $null }
@@ -326,7 +392,7 @@ function New-HtmlTable {
                         $spanCount = 1
                         for ($nextRow = $startRow + 1; $nextRow -lt $NewData.Count; $nextRow++) {
                             $match = $true
-                            foreach($prevCol in $MergeColumns) {
+                            foreach ($prevCol in $MergeColumns) {
                                 $currentVal = $NewData[$nextRow]."$prevCol"
                                 $startVal = $NewData[$startRow]."$prevCol"
                                 if ("$currentVal" -ne "$startVal") { $match = $false; break }
@@ -338,8 +404,8 @@ function New-HtmlTable {
                         $compareTargetRowData = if ($startRow -eq 0) { $lastExistingRowData } else { $NewData[$startRow - 1] }
                         if ($null -ne $compareTargetRowData) {
                             $matchChainWithPrevious = $true
-                            foreach($prevCol in $MergeColumns) {
-                                $prevCompareValue = if ($compareTargetRowData -is [hashtable]){ $compareTargetRowData[$prevCol] } else { $compareTargetRowData.$prevCol }
+                            foreach ($prevCol in $MergeColumns) {
+                                $prevCompareValue = if ($compareTargetRowData -is [hashtable]) { $compareTargetRowData[$prevCol] } else { $compareTargetRowData.$prevCol }
                                 $prevCurrentValue = $NewData[$startRow]."$prevCol"
                                 if ("$prevCurrentValue" -ne "$prevCompareValue") { $matchChainWithPrevious = $false; break }
                                 if ($prevCol -eq $colName) { break }
@@ -381,7 +447,7 @@ function New-HtmlTable {
 
             Write-Verbose "Reconstructing final HTML..."
             $partBeforeTbody = $ExistingHtmlTable.Substring(0, $tbodyStartIndex)
-            $partAfterTbody  = $ExistingHtmlTable.Substring($tbodyEndIndex + $tbodyEndTag.Length)
+            $partAfterTbody = $ExistingHtmlTable.Substring($tbodyEndIndex + $tbodyEndTag.Length)
             $finalHtmlBuilder = [System.Text.StringBuilder]::new()
             $finalHtmlBuilder.Append($partBeforeTbody) | Out-Null
             $finalHtmlBuilder.Append($tbodyStartTag) | Out-Null
@@ -398,6 +464,8 @@ function New-HtmlTable {
         Write-Verbose "[$((Get-Date).TimeOfDay)] Function Start. Parameter Set: $($PSCmdlet.ParameterSetName)"
         $newData = [System.Collections.Generic.List[object]]::new()
         $doMerge = $false
+        # Work on a copy: the parameter variable keeps its validation and cannot be set to $null
+        $effectiveMergeColumns = $MergeColumns
 
         if ($MergeRows.IsPresent -and ($null -eq $MergeColumns -or $MergeColumns.Length -eq 0)) {
             Write-Warning "MergeRows specified without MergeColumns. Merging disabled."
@@ -409,7 +477,7 @@ function New-HtmlTable {
         }
         if (-not $doMerge -and $PSBoundParameters.ContainsKey('MergeColumns') -and $MergeColumns.Length -gt 0) {
             Write-Warning "MergeColumns specified without MergeRows. Ignoring MergeColumns."
-            $MergeColumns = $null
+            $effectiveMergeColumns = $null
         }
 
         if ($PSCmdlet.ParameterSetName -eq 'MergeExisting') {
@@ -430,20 +498,20 @@ function New-HtmlTable {
         Write-Verbose "[$((Get-Date).TimeOfDay)] End block started. Dispatching to helper function..."
         if ($PSCmdlet.ParameterSetName -eq 'MergeExisting') {
             return _NewHtmlTable_HandleMergeExisting -NewData $newData `
-                                                     -ExistingHtmlTable $ExistingHtmlTable `
-                                                     -Properties $Properties `
-                                                     -CellStyle $CellStyle `
-                                                     -DoMerge $doMerge `
-                                                     -MergeColumns $MergeColumns `
-                                                     -BoundParameters $PSBoundParameters `
-                                                     -NullDisplay $NullDisplay `
-                                                     -UseNbspForEmpty:$UseNbspForEmpty `
-                                                     -PreserveHtml:$PreserveHtml
+                -ExistingHtmlTable $ExistingHtmlTable `
+                -Properties $Properties `
+                -CellStyle $CellStyle `
+                -DoMerge $doMerge `
+                -MergeColumns $effectiveMergeColumns `
+                -BoundParameters $PSBoundParameters `
+                -NullDisplay $NullDisplay `
+                -UseNbspForEmpty:$UseNbspForEmpty `
+                -PreserveHtml:$PreserveHtml
         } else {
             $tableStyleAttribute = $(ConvertStyleHashtableToString $Style)
             $tableClassAttribute = ""
             if ($PSBoundParameters.ContainsKey('CssClass') -and -not [string]::IsNullOrWhiteSpace($CssClass)) {
-                $safeCssClass = $CssClass.Trim() -replace '"',''
+                $safeCssClass = $CssClass.Trim() -replace '"', ''
                 if ($safeCssClass) { $tableClassAttribute = " class=`"$safeCssClass`"" }
             }
 
@@ -458,32 +526,32 @@ function New-HtmlTable {
             }
 
             if ($doMerge) {
-                if ($null -eq $MergeColumns -or $MergeColumns.Length -eq 0) {
+                if ($null -eq $effectiveMergeColumns -or $effectiveMergeColumns.Length -eq 0) {
                     Write-Error "Internal Error: MergeColumns null/empty when DoMerge is true."; return $null
                 }
                 if ($null -eq $finalProperties) {
                     Write-Error "Cannot validate MergeColumns because properties could not be determined."; return $null
                 }
-                $invalidMergeCols = $MergeColumns | Where-Object { $finalProperties -notcontains $_ }
+                $invalidMergeCols = $effectiveMergeColumns | Where-Object { $finalProperties -notcontains $_ }
                 if ($invalidMergeCols) {
                     Write-Error ("MergeColumns not valid for CreateNew: {0}. Valid properties: {1}" -f ($invalidMergeCols -join ', '), ($finalProperties -join ', '))
                     return $null
                 }
-                Write-Verbose ("MergeColumns validated for CreateNew: {0}" -f ($MergeColumns -join ', '))
+                Write-Verbose ("MergeColumns validated for CreateNew: {0}" -f ($effectiveMergeColumns -join ', '))
             }
 
             return _NewHtmlTable_HandleCreateNew -Data $newData `
-                                                 -Properties $finalProperties `
-                                                 -Title $Title `
-                                                 -TableStyleAttribute $tableStyleAttribute `
-                                                 -TableClassAttribute $tableClassAttribute `
-                                                 -HeaderStyle $HeaderStyle `
-                                                 -CellStyle $CellStyle `
-                                                 -DoMerge $doMerge `
-                                                 -MergeColumns $MergeColumns `
-                                                 -NullDisplay $NullDisplay `
-                                                 -UseNbspForEmpty:$UseNbspForEmpty `
-                                                 -PreserveHtml:$PreserveHtml
+                -Properties $finalProperties `
+                -Title $Title `
+                -TableStyleAttribute $tableStyleAttribute `
+                -TableClassAttribute $tableClassAttribute `
+                -HeaderStyle $HeaderStyle `
+                -CellStyle $CellStyle `
+                -DoMerge $doMerge `
+                -MergeColumns $effectiveMergeColumns `
+                -NullDisplay $NullDisplay `
+                -UseNbspForEmpty:$UseNbspForEmpty `
+                -PreserveHtml:$PreserveHtml
         }
         Write-Verbose "[$((Get-Date).TimeOfDay)] End block finished."
     } # End End block

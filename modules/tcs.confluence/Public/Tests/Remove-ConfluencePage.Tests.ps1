@@ -1,30 +1,48 @@
-#Requires -Modules Pester
-
 BeforeAll {
-    . "$PSScriptRoot\..\Public\Remove-ConfluencePage.ps1"
-    . "$PSScriptRoot\..\Public\Set-ConfluenceContext.ps1"
+    $env:TCS_CONFIG_ROOT = Join-Path -Path $TestDrive -ChildPath 'config'
+    $env:TCS_SKIP_UPDATE_CHECK = '1'
+    $env:TCS_TELEMETRY_OPTOUT = '1'
+    $ModuleRoot = Split-Path -Path (Split-Path -Path $PSScriptRoot -Parent) -Parent
+    Import-Module -Name (Join-Path -Path $ModuleRoot -ChildPath 'tcs.confluence.psd1') -Force
 }
 
+AfterAll {
+    Remove-Module -Name tcs.confluence -Force -ErrorAction SilentlyContinue
+}
+
+
 Describe 'Remove-ConfluencePage' {
+    BeforeAll {
+        Set-ConfluenceContext -ConfluenceUrl 'https://contoso.atlassian.net' -Username 'user@contoso.com' -PersonalAccessToken 'token'
+    }
+
     BeforeEach {
-        Set-ConfluenceContext -ConfluenceUrl "https://example.atlassian.net/wiki" -Username "user" -PersonalAccessToken "token"
+        Mock -ModuleName tcs.confluence Invoke-WebRequest { [pscustomobject]@{ StatusCode = 204; StatusDescription = 'No Content'; Content = '' } }
     }
 
-    It 'should call Invoke-ConfluenceRequest with DELETE method and correct PageId' {
-        Mock -ModuleName tcs.confluence -CommandName Invoke-ConfluenceRequest -MockWith { return $true } -Verifiable
-
-        Remove-ConfluencePage -PageId '12345' -Confirm:$false
-
-        Assert-MockCalled -ModuleName tcs.confluence -CommandName Invoke-ConfluenceRequest -Scope It -ParameterFilter {
-            $Resource -eq 'pages/12345' -and $Method -eq 'DELETE'
-        } -Exactly 1
+    It 'Has ConfirmImpact High' {
+        (Get-Command Remove-ConfluencePage).ScriptBlock.Attributes.Where({ $_ -is [System.Management.Automation.CmdletBindingAttribute] }).ConfirmImpact | Should -Be 'High'
     }
 
-    It 'should not call Invoke-ConfluenceRequest when -WhatIf is specified' {
-        Mock -ModuleName tcs.confluence -CommandName Invoke-ConfluenceRequest -MockWith { return $true } -Verifiable
+    It 'Sends DELETE for the page and writes nothing to the pipeline' {
+        Remove-ConfluencePage -PageId 12345 -Confirm:$false -ErrorAction Stop | Should -BeNullOrEmpty
+        Should -Invoke -ModuleName tcs.confluence Invoke-WebRequest -Times 1 -Exactly -ParameterFilter {
+            $Method -eq 'DELETE' -and $Uri.OriginalString -eq 'https://contoso.atlassian.net/wiki/api/v2/pages/12345'
+        }
+    }
 
-        Remove-ConfluencePage -PageId '12345' -WhatIf
+    It 'Accepts pages from the pipeline' {
+        @([pscustomobject]@{ id = '1' }, [pscustomobject]@{ id = '2' }) | Remove-ConfluencePage -Confirm:$false
+        Should -Invoke -ModuleName tcs.confluence Invoke-WebRequest -Times 2 -Exactly
+    }
 
-        Assert-MockCalled -ModuleName tcs.confluence -CommandName Invoke-ConfluenceRequest -Scope It -Exactly 0
+    It 'Sends nothing with -WhatIf' {
+        Remove-ConfluencePage -PageId 12345 -WhatIf
+        Should -Invoke -ModuleName tcs.confluence Invoke-WebRequest -Times 0 -Exactly
+    }
+
+    It 'Reports failures' {
+        Mock -ModuleName tcs.confluence Invoke-WebRequest { [pscustomobject]@{ StatusCode = 404; StatusDescription = 'Not Found'; Content = '' } }
+        { Remove-ConfluencePage -PageId 12345 -Confirm:$false -ErrorAction Stop } | Should -Throw -ExpectedMessage '*12345*404*'
     }
 }
