@@ -5,18 +5,23 @@
     Author               = 'Nigel Tatschner'
     CompanyName          = 'TheCodeSaiyan'
     Copyright            = '(c) 2025-2026 Nigel Tatschner. All rights reserved.'
-    Description          = 'Functions to work with Confluence Cloud: a REST client (pages and spaces) and builders for Confluence storage-format content such as headings, tables, code blocks, links, layouts and tables of contents.'
+    Description          = 'Functions to work with Confluence Cloud: a REST client (pages, spaces, search, labels and attachments) and builders for Confluence storage-format content such as headings, tables, code blocks, links, layouts and tables of contents.'
     CompatiblePSEditions = @('Desktop', 'Core')
     PowerShellVersion    = '5.1'
     RequiredModules      = @(
         @{ ModuleName = 'tcs.core'; ModuleVersion = '0.3.0' }
     )
     FunctionsToExport    = @(
+        'Add-ConfluenceAttachment',
+        'Add-ConfluencePageLabel',
         'Clear-ConfluenceContext',
         'ConvertTo-ConfluenceHTML',
+        'Get-ConfluenceAttachment',
         'Get-ConfluenceContext',
         'Get-ConfluencePage',
+        'Get-ConfluencePageChild',
         'Get-ConfluencePageContent',
+        'Get-ConfluencePageLabel',
         'Get-ConfluenceSpace',
         'Invoke-ConfluenceRequest',
         'Join-ConfluenceContent',
@@ -34,7 +39,9 @@
         'New-ConfluencePage',
         'New-ConfluencePageLayout',
         'Remove-ConfluencePage',
+        'Remove-ConfluencePageLabel',
         'Remove-DuplicateConfluencePage',
+        'Search-ConfluenceContent',
         'Set-ConfluenceContext',
         'Update-ConfluencePage'
     )
