@@ -1,56 +1,97 @@
 function Get-ConfluencePageContent {
+    <#
+    .SYNOPSIS
+        Gets Confluence pages including their body in the requested format.
+
+    .DESCRIPTION
+        Get-ConfluencePageContent retrieves a page by ID, or searches pages by space and title, and asks
+        Confluence to include the page body in the format given by -ContentType (storage by default).
+        A title containing wildcards (* ?) is searched with CQL through the v1 content API.
+
+        Returns the object from Invoke-ConfluenceRequest: the pages are in its Results property and
+        the body is in body.<format>.value.
+
+    .PARAMETER PageId
+        The ID of the page to retrieve.
+
+    .PARAMETER SpaceKey
+        The space key or numeric space ID to search in.
+
+    .PARAMETER Title
+        The exact page title, or a title with wildcards (* ?).
+
+    .PARAMETER ResultsLimit
+        The number of results requested per API call when searching. Default 25.
+
+    .PARAMETER MaxQueryPages
+        The maximum number of API result pages to retrieve when searching. Default 3.
+
+    .PARAMETER ContentType
+        The body format to return: storage (default), atlas_doc_format, view, export_view,
+        styled_view, anonymous_export_view or editor.
+
+    .EXAMPLE
+        (Get-ConfluencePageContent -PageId 123456).Results.body.storage.value
+
+        Returns the storage-format body of page 123456.
+
+    .EXAMPLE
+        Get-ConfluencePageContent -SpaceKey DOCS -Title 'Runbook' -ContentType view
+
+        Returns the Runbook page in the DOCS space with its rendered HTML body.
+
+    .OUTPUTS
+        System.Management.Automation.PSCustomObject with Results and MultiPage properties.
+    #>
     [CmdletBinding(DefaultParameterSetName = 'ById')]
+    [OutputType([pscustomobject])]
     param (
-        [Parameter(Mandatory, ParameterSetName = 'ById')]
+        [Parameter(Mandatory, ParameterSetName = 'ById', HelpMessage = 'The ID of the page.')]
         [string]$PageId,
 
-        [Parameter(HelpMessage = "Optional space key or numeric spaceId filter (auto-resolved by Invoke-ConfluenceRequest).", ParameterSetName = 'Search')]
+        [Parameter(HelpMessage = 'Optional space key or numeric spaceId filter (auto-resolved by Invoke-ConfluenceRequest).', ParameterSetName = 'Search')]
         [string]$SpaceKey,
 
-        [Parameter(HelpMessage = "Exact title or wildcard (* ?) to search for.", ParameterSetName = 'Search')]
+        [Parameter(HelpMessage = 'Exact title or wildcard (* ?) to search for.', ParameterSetName = 'Search')]
         [string]$Title,
 
-        [Parameter(HelpMessage = "Maximum results (limit).")]
+        [Parameter(HelpMessage = 'Maximum results (limit).')]
+        [ValidateRange(1, 250)]
         [int]$ResultsLimit = 25,
 
-        [Parameter(HelpMessage = "Maximum paged queries.")]
+        [Parameter(HelpMessage = 'Maximum paged queries.')]
+        [ValidateRange(1, 1000)]
         [int16]$MaxQueryPages = 3,
 
-        [Parameter(Mandatory, HelpMessage = "Content (body) format to return.")]
-        [ValidateSet("export_view","storage","editor","view","styled_view","anonymous_export_view","atlas_doc_format")]
-        [string]$ContentType = "storage"
+        [Parameter(HelpMessage = 'Content (body) format to return.')]
+        [ValidateSet('export_view', 'storage', 'editor', 'view', 'styled_view', 'anonymous_export_view', 'atlas_doc_format')]
+        [string]$ContentType = 'storage'
     )
 
-    begin {
-        $query = @{ 'body-format' = $ContentType }
-        if ($PSCmdlet.ParameterSetName -eq 'Search') {
-            if ($ResultsLimit) { $query.limit = $ResultsLimit }
-            if ($SpaceKey) { $query.spaceKey = $SpaceKey }
-            if ($Title -and $Title -notmatch '[\*\?]') {
-                # exact title (v2)
-                $query.title = ($Title -replace '[<>#%{}|\\^~\[\]`&]', '')
-            }
+    $query = @{ 'body-format' = $ContentType }
+    try {
+        if ($PSCmdlet.ParameterSetName -eq 'ById') {
+            return (Invoke-ConfluenceRequest -Method GET -Resource pages -Id $PageId -Query $query -MaxQueryPages 1 -ErrorAction Stop)
         }
-    }
 
-    process {
-        try {
-            if ($PSCmdlet.ParameterSetName -eq 'ById') {
-                $resp = Invoke-ConfluenceRequest -Method GET -Resource pages -Id $PageId -Query $query -MaxQueryPages 1 -ErrorAction Stop
-            } else {
-                $splat = @{
-                    Method        = 'GET'
-                    Resource      = 'pages'
-                    Query         = $query
-                    MaxQueryPages = $MaxQueryPages
-                }
-                if ($Title -and $Title -match '[\*\?]') { $splat.Search = $Title }
-                $resp = Invoke-ConfluenceRequest @splat -ErrorAction Stop
-            }
-            return $resp
+        if ($ResultsLimit) { $query.limit = $ResultsLimit }
+        if ($SpaceKey) { $query.spaceKey = $SpaceKey }
+        $requestParams = @{
+            Method        = 'GET'
+            Resource      = 'pages'
+            Query         = $query
+            MaxQueryPages = $MaxQueryPages
         }
-        catch {
-            Write-Error "Failed to retrieve page content. Error: $_"
+        if ($Title -and $Title -match '[\*\?]') {
+            $requestParams.Search = $Title
         }
+        elseif ($Title) {
+            # Exact title filter (v2); characters that break the query string are removed
+            $query.title = ($Title -replace '[<>#%{}|\\^~\[\]`&]', '')
+        }
+        return (Invoke-ConfluenceRequest @requestParams -ErrorAction Stop)
+    }
+    catch {
+        Write-Error "Failed to retrieve page content. Error: $_"
     }
 }

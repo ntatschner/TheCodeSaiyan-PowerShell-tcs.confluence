@@ -1,4 +1,3 @@
-#Requires -Version 3.0
 function Get-HtmlTableRowData {
     <#
     .SYNOPSIS
@@ -41,9 +40,9 @@ function Get-HtmlTableRowData {
         (first <th> cell in a <tbody> row). Defaults to "RowHeader". Must be a valid simple variable name.
 
     .PARAMETER DecodeHtmlEntities
-        Switch parameter. If specified, attempts to decode HTML entities (like &, <,  )
-        found within header and table cell data using [System.Web.HttpUtility]::HtmlDecode.
-        Defaults to $true (decoding enabled). Specify -DecodeHtmlEntities:$false to disable.
+        Boolean parameter. When $true (the default), attempts to decode HTML entities (like &amp;, &lt;, &nbsp;)
+        found within header and table cell data using [System.Net.WebUtility]::HtmlDecode.
+        Specify -DecodeHtmlEntities $false to keep entities as they are.
 
     .EXAMPLE
         # Example 1: Table with Confluence Macros
@@ -121,6 +120,7 @@ function Get-HtmlTableRowData {
         [switch]$NoRowHeader,
 
         [Parameter()]
+        [ValidatePattern('^[a-zA-Z_][a-zA-Z0-9_]*$')]
         [string]$RowHeaderColumnName = "RowHeader",
 
         [Parameter()]
@@ -130,11 +130,6 @@ function Get-HtmlTableRowData {
 
     Begin {
         Write-Verbose "[$((Get-Date).TimeOfDay)] Function Start."
-        # Validate RowHeaderColumnName using Regex
-        if ($RowHeaderColumnName -notmatch '^[a-zA-Z_][a-zA-Z0-9_]*$') {
-            Write-Error "Invalid -RowHeaderColumnName specified: '$RowHeaderColumnName'."; return $null
-        }
-        try { Add-Type -AssemblyName System.Web -ErrorAction Stop } catch { Write-Warning "System.Web assembly load failed. HTML entity decoding might fail." }
     }
 
     Process {
@@ -163,14 +158,14 @@ function Get-HtmlTableRowData {
                 if ($headerRowMatch.Success) {
                     $thMatches = [regex]::Matches($headerRowMatch.Groups[1].Value, '(?si)<th.*?>(.*?)</th>')
                     if ($thMatches.Count -gt 0) {
-                         $startIndex = 0; if ($thMatches.Count -gt 1 -and [string]::IsNullOrWhiteSpace($thMatches[0].Groups[1].Value -replace '<.*?>','')) { Write-Verbose "Skipping first potential empty corner header cell."; $startIndex = 1 }
-                         # Process headers: Decode entities FIRST, then strip tags
-                         $columnHeaders = $thMatches[$startIndex..($thMatches.Count - 1)] | ForEach-Object {
+                        $startIndex = 0; if ($thMatches.Count -gt 1 -and [string]::IsNullOrWhiteSpace(($thMatches[0].Groups[1].Value -replace '<.*?>', ''))) { Write-Verbose "Skipping first potential empty corner header cell."; $startIndex = 1 }
+                        # Process headers: Decode entities FIRST, then strip tags
+                        $columnHeaders = $thMatches[$startIndex..($thMatches.Count - 1)] | ForEach-Object {
                             $headerText = $_.Groups[1].Value.Trim()
-                            if ($DecodeHtmlEntities) { try { $headerText = [System.Web.HttpUtility]::HtmlDecode($headerText) } catch { Write-Warning "Header decode error: $($_.Exception.Message)" } }
-                            $headerText -replace '<.*?>','' # Strip tags last
-                         }
-                         Write-Verbose "Detected Column Headers: $($columnHeaders -join ', ')"
+                            if ($DecodeHtmlEntities) { try { $headerText = [System.Net.WebUtility]::HtmlDecode($headerText) } catch { Write-Warning "Header decode error: $($_.Exception.Message)" } }
+                            $headerText -replace '<.*?>', '' # Strip tags last
+                        }
+                        Write-Verbose "Detected Column Headers: $($columnHeaders -join ', ')"
                     } else { Write-Verbose "Found <thead>/<tr> but no <th> tags. Using default names." }
                 } else { Write-Verbose "Found <thead> but no <tr> tags. Using default names." }
             } else { Write-Verbose "No <thead> found. Using default names." }
@@ -181,15 +176,15 @@ function Get-HtmlTableRowData {
         $tbodyMatch = [regex]::Match($targetTableHtml, '(?si)<tbody.*?>(.*?)</tbody>')
         $tbodyContent = ""
         if (-not $tbodyMatch.Success) {
-             Write-Warning "No <tbody> found. Attempting fallback extraction (may be inaccurate)."
-             # Fallback logic (remains simplified)
-             $headerEndIndex = 0; $headerRowMatchLocal = $null # Use local var to avoid conflict
-             if ($theadMatch.Success) { $headerEndIndex = $theadMatch.Index + $theadMatch.Length }
-             elseif($headerRowMatchLocal = [regex]::Match($targetTableHtml, '(?si)<tr.*?>(.*?)</tr>')) { if([regex]::IsMatch($headerRowMatchLocal.Groups[1].Value, '(?si)<th.*?>')){ $headerEndIndex = $headerRowMatchLocal.Index + $headerRowMatchLocal.Length } }
-             else { $tableTagMatch = [regex]::Match($targetTableHtml, '(?si)<table.*?>'); if ($tableTagMatch.Success) { $headerEndIndex = $tableTagMatch.Length } }
-             $endTableMatch = [regex]::Match($targetTableHtml, '(?si)</table>\s*$', [System.Text.RegularExpressions.RegexOptions]::RightToLeft)
-             if ($endTableMatch.Success -and $headerEndIndex -lt $endTableMatch.Index) { $tbodyContent = $targetTableHtml.Substring($headerEndIndex, $endTableMatch.Index - $headerEndIndex) }
-             else { Write-Warning "Could not determine body content without <tbody>."; $tbodyContent = "" }
+            Write-Warning "No <tbody> found. Attempting fallback extraction (may be inaccurate)."
+            # Fallback logic (remains simplified)
+            $headerEndIndex = 0; $headerRowMatchLocal = $null # Use local var to avoid conflict
+            if ($theadMatch.Success) { $headerEndIndex = $theadMatch.Index + $theadMatch.Length }
+            elseif ($headerRowMatchLocal = [regex]::Match($targetTableHtml, '(?si)<tr.*?>(.*?)</tr>')) { if ([regex]::IsMatch($headerRowMatchLocal.Groups[1].Value, '(?si)<th.*?>')) { $headerEndIndex = $headerRowMatchLocal.Index + $headerRowMatchLocal.Length } }
+            else { $tableTagMatch = [regex]::Match($targetTableHtml, '(?si)<table.*?>'); if ($tableTagMatch.Success) { $headerEndIndex = $tableTagMatch.Length } }
+            $endTableMatch = [regex]::Match($targetTableHtml, '(?si)</table>\s*$', [System.Text.RegularExpressions.RegexOptions]::RightToLeft)
+            if ($endTableMatch.Success -and $headerEndIndex -lt $endTableMatch.Index) { $tbodyContent = $targetTableHtml.Substring($headerEndIndex, $endTableMatch.Index - $headerEndIndex) }
+            else { Write-Warning "Could not determine body content without <tbody>."; $tbodyContent = "" }
         } else { $tbodyContent = $tbodyMatch.Groups[1].Value; Write-Verbose "Found <tbody> content." }
 
 
@@ -202,10 +197,10 @@ function Get-HtmlTableRowData {
 
         # --- Pre-calculate max DATA cells (<td>) if default COL headers are needed ---
         if ($columnHeaders.Count -eq 0) {
-             Write-Verbose "Calculating maximum DATA cell (<td>) count for default headers..."
-             foreach ($rowMatch in $rowMatches) { $dataCellMatches = [regex]::Matches($rowMatch.Groups[1].Value, '(?si)<td.*?>(.*?)</td>'); if ($dataCellMatches.Count -gt $maxDataCellsFound) { $maxDataCellsFound = $dataCellMatches.Count } }
-             Write-Verbose "Maximum data cells (<td>) found in a row: $maxDataCellsFound"
-             if ($maxDataCellsFound -eq 0 -and $rowMatches.Count -gt 0) { Write-Warning "Found rows but no data cells (<td>) within them." }
+            Write-Verbose "Calculating maximum DATA cell (<td>) count for default headers..."
+            foreach ($rowMatch in $rowMatches) { $dataCellMatches = [regex]::Matches($rowMatch.Groups[1].Value, '(?si)<td.*?>(.*?)</td>'); if ($dataCellMatches.Count -gt $maxDataCellsFound) { $maxDataCellsFound = $dataCellMatches.Count } }
+            Write-Verbose "Maximum data cells (<td>) found in a row: $maxDataCellsFound"
+            if ($maxDataCellsFound -eq 0 -and $rowMatches.Count -gt 0) { Write-Warning "Found rows but no data cells (<td>) within them." }
         }
         # --- Generate default COL headers if needed ---
         if ($columnHeaders.Count -eq 0 -and $maxDataCellsFound -gt 0) { $columnHeaders = 1..$maxDataCellsFound | ForEach-Object { "Column$_" }; Write-Verbose "Generated default column headers: $($columnHeaders -join ', ')" }
@@ -229,13 +224,13 @@ function Get-HtmlTableRowData {
                     $rawHeaderContent = $firstCellMatch.Groups[2].Value
                     $processedHeaderContent = $rawHeaderContent # Start with raw
 
-                    if ($DecodeHtmlEntities) { try { $processedHeaderContent = [System.Web.HttpUtility]::HtmlDecode($processedHeaderContent) } catch { Write-Warning "Row $rowCount`: Error decoding row header: $($_.Exception.Message)." } }
+                    if ($DecodeHtmlEntities) { try { $processedHeaderContent = [System.Net.WebUtility]::HtmlDecode($processedHeaderContent) } catch { Write-Warning "Row $rowCount`: Error decoding row header: $($_.Exception.Message)." } }
 
                     $processedHeaderContent = $processedHeaderContent -replace '(?si)<ac:userlink.*?>\s*(.*?)\s*</ac:userlink>', '$1' `
-                                                                   -replace '(?si)<ac:link.*?>.*?<ac:plain-text-link-body>\s*<!\[CDATA\[(.*?)]]>\s*</ac:plain-text-link-body>.*?</ac:link>', '$1' `
-                                                                   -replace '(?si)<a\s+[^>]*?href\s*=\s*".*?".*?>\s*(.*?)\s*</a>', '$1' `
-                                                                   -replace '(?si)<ac:structured-macro\s+(?:[^>]*?\s+)?ac:name\s*=\s*"jira"(?:\s+[^>]*?)?>.*?<ac:parameter\s+(?:[^>]*?\s+)?ac:name\s*=\s*"key"(?:\s+[^>]*?)?>(.*?)</ac:parameter>.*?</ac:structured-macro>', '$1'
-                    $rowHeaderValue = ($processedHeaderContent -replace '<.*?>','').Trim()
+                        -replace '(?si)<ac:link.*?>.*?<ac:plain-text-link-body>\s*<!\[CDATA\[(.*?)]]>\s*</ac:plain-text-link-body>.*?</ac:link>', '$1' `
+                        -replace '(?si)<a\s+[^>]*?href\s*=\s*".*?".*?>\s*(.*?)\s*</a>', '$1' `
+                        -replace '(?si)<ac:structured-macro\s+(?:[^>]*?\s+)?ac:name\s*=\s*"jira"(?:\s+[^>]*?)?>.*?<ac:parameter\s+(?:[^>]*?\s+)?ac:name\s*=\s*"key"(?:\s+[^>]*?)?>(.*?)</ac:parameter>.*?</ac:structured-macro>', '$1'
+                    $rowHeaderValue = ($processedHeaderContent -replace '<.*?>', '').Trim()
 
                     $rowData[$RowHeaderColumnName] = $rowHeaderValue
                     $dataCellsHtml = $rowHtml.Substring($firstCellMatch.Index + $firstCellMatch.Length) # Get rest of row
@@ -257,7 +252,7 @@ function Get-HtmlTableRowData {
 
                 # Decode Entities FIRST - critical for accurate macro parsing
                 if ($DecodeHtmlEntities) {
-                    try { $processedCellContent = [System.Web.HttpUtility]::HtmlDecode($processedCellContent) }
+                    try { $processedCellContent = [System.Net.WebUtility]::HtmlDecode($processedCellContent) }
                     catch { Write-Warning "Row $rowCount, Cell $($cellIndex + 1): Error decoding HTML entity: $($_.Exception.Message)." }
                 }
 
@@ -274,18 +269,18 @@ function Get-HtmlTableRowData {
 
                 # --- Final Cleanup ---
                 # Strip remaining simple HTML tags (like <b>, <i>, <span> etc.) and trim
-                $finalCellContent = ($processedCellContent -replace '<.*?>','').Trim()
+                $finalCellContent = ($processedCellContent -replace '<.*?>', '').Trim()
 
                 $rowData[$headerName] = $finalCellContent
                 $cellIndex++
             }
 
-             # Pad missing DATA cells based on COLUMN headers
-             if ($columnHeaders.Count -gt 0 -and $cellCount -lt $columnHeaders.Count) {
-                 for ($i = $cellCount; $i -lt $columnHeaders.Count; $i++) {
+            # Pad missing DATA cells based on COLUMN headers
+            if ($columnHeaders.Count -gt 0 -and $cellCount -lt $columnHeaders.Count) {
+                for ($i = $cellCount; $i -lt $columnHeaders.Count; $i++) {
                     $headerName = $columnHeaders[$i]; $rowData[$headerName] = $null; Write-Verbose "Row $rowCount`: Padding missing value for column header '$headerName'."
-                 }
-             }
+                }
+            }
 
             # Convert to PSCustomObject
             if ($rowData.Count -gt 0) { $outputObjects.Add([PSCustomObject]$rowData) }

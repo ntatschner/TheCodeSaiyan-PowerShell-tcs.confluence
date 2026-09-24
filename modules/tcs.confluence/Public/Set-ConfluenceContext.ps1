@@ -1,36 +1,101 @@
 function Set-ConfluenceContext {
-    [CmdletBinding()]
+    <#
+    .SYNOPSIS
+        Sets the Confluence site and credential used by the other tcs.confluence commands.
+
+    .DESCRIPTION
+        Set-ConfluenceContext stores the Confluence base URL and your credential for the current
+        PowerShell session. The URL is normalised (a trailing /wiki, /wiki/api/v2 or /wiki/rest/api is
+        removed) and the API endpoint for the chosen version is derived from it.
+
+        The credential is kept in memory only, as a PSCredential (the token is held in a SecureString).
+        It is never written to disk, never returned by Get-ConfluenceContext and never written to the
+        verbose, warning or error streams. The Authorization header is built for each request.
+
+        Use Get-ConfluenceContext to see the current connection details.
+
+    .PARAMETER ConfluenceUrl
+        The base URL of the Confluence site, for example https://contoso.atlassian.net. Only https URLs
+        are accepted so the credential is never sent in clear text.
+
+    .PARAMETER Username
+        The account e-mail address (Confluence Cloud) or user name used with the API token.
+
+    .PARAMETER PersonalAccessToken
+        The API token or personal access token as plain text. Kept for backward compatibility; prefer
+        -Credential so the token is not visible in your command history.
+
+    .PARAMETER Credential
+        A PSCredential whose user name is the account e-mail address and whose password is the API
+        token, for example from Get-Credential or a secret store.
+
+    .PARAMETER ApiVersion
+        The default REST API version for the derived ConnectionURI: v2 (default) or v1.
+
+    .EXAMPLE
+        Set-ConfluenceContext -ConfluenceUrl 'https://contoso.atlassian.net' -Credential (Get-Credential)
+
+        Prompts for the e-mail address and API token and stores them for the session.
+
+    .EXAMPLE
+        Set-ConfluenceContext -ConfluenceUrl 'https://contoso.atlassian.net/wiki' -Username 'me@contoso.com' -PersonalAccessToken $token
+
+        Uses a token held in a variable. The URL is normalised to https://contoso.atlassian.net.
+
+    .OUTPUTS
+        None.
+    #>
+    [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Low', DefaultParameterSetName = 'Token')]
     param (
-        [Parameter(Mandatory = $true, HelpMessage = "The base URL of the Confluence instance.")]
+        [Parameter(Mandatory = $true, HelpMessage = 'The base URL of the Confluence instance.')]
         [ValidatePattern('^https://')]
         [string]$ConfluenceUrl,
-        [Parameter(Mandatory)][Alias("EmailAddress")][string]$Username,
-        [Parameter(Mandatory)][Alias("PAT")][string]$PersonalAccessToken,
-        [ValidateSet("v1","v2")][string]$ApiVersion = "v2"
+
+        [Parameter(Mandatory = $true, ParameterSetName = 'Token')]
+        [Alias('EmailAddress')]
+        [ValidateNotNullOrEmpty()]
+        [string]$Username,
+
+        [Parameter(Mandatory = $true, ParameterSetName = 'Token')]
+        [Alias('PAT')]
+        [ValidateNotNullOrEmpty()]
+        [string]$PersonalAccessToken,
+
+        [Parameter(Mandatory = $true, ParameterSetName = 'Credential')]
+        [System.Management.Automation.PSCredential]
+        [System.Management.Automation.Credential()]
+        $Credential,
+
+        [ValidateSet('v1', 'v2')]
+        [string]$ApiVersion = 'v2'
     )
 
-    # --- Normalize base URL ---
+    # --- Normalise the base URL ---
     $raw = $ConfluenceUrl.Trim().TrimEnd('/')
     $normalized = ($raw -replace '(?i)/wiki/?(api/v2|rest/api)?$', '')
     $apiSuffix = if ($ApiVersion -eq 'v1') { '/wiki/rest/api' } else { '/wiki/api/v2' }
-    $ConnectionURI = "$normalized$apiSuffix"
+    $connectionUri = "$normalized$apiSuffix"
 
-    # FIX (braces)
-    $basicPair  = "${Username}:${PersonalAccessToken}"
-    $authHeader = "Basic " + [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($basicPair))
+    if ($PSCmdlet.ParameterSetName -eq 'Token') {
+        $secureToken = New-Object -TypeName System.Security.SecureString
+        foreach ($character in $PersonalAccessToken.ToCharArray()) {
+            $secureToken.AppendChar($character)
+        }
+        $secureToken.MakeReadOnly()
+        $Credential = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList $Username, $secureToken
+    }
 
-    $ContextParams = @{
+    if (-not $PSCmdlet.ShouldProcess($normalized, 'Set Confluence context')) {
+        return
+    }
+
+    $script:ConfluenceCredential = $Credential
+    $script:ConfluenceContext = [pscustomobject]@{
         OriginalConnectionURL = $raw
         ConnectionBaseURL     = $normalized
-        ConnectionURI         = $ConnectionURI
-        Username              = $Username
-        PersonalAccessToken   = ('*' * 8)
-        AuthorizationHeader   = @{
-            Authorization = $authHeader
-            ContentType   = "application/json"
-            Accept        = "application/json"
-        }
+        ConnectionURI         = $connectionUri
+        ApiVersion            = $ApiVersion
+        Username              = $Credential.UserName
     }
-    $global:ConfluenceContext = [pscustomobject]$ContextParams
-    Write-Verbose "Confluence context set. Base='$normalized' API='$apiSuffix'"
+    Write-Verbose "Confluence context set. Base='$normalized' API='$apiSuffix' User='$($Credential.UserName)'"
 }

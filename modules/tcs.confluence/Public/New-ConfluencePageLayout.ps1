@@ -1,18 +1,45 @@
 function New-ConfluencePageLayout {
+    <#
+    .SYNOPSIS
+        Creates a Confluence page layout section with one to three columns.
+
+    .DESCRIPTION
+        New-ConfluencePageLayout returns the storage-format markup for an ac:layout with one section
+        of the chosen type. The content for each column is passed through dynamic parameters that
+        appear once -LayoutType is given: -SectionOne for single, -SectionOne and -SectionTwo for the
+        two-column layouts, and -SectionOne, -SectionTwo and -SectionThree for the three-column layouts.
+
+        Returns an object with LayoutType, LayoutXml (the markup) and ContentSections (the number of
+        columns).
+
+    .PARAMETER LayoutType
+        The layout: single, two_equal, two_left_sidebar, two_right_sidebar, three_equal or
+        three_with_sidebars.
+
+    .EXAMPLE
+        (New-ConfluencePageLayout -LayoutType two_equal -SectionOne '<p>Left</p>' -SectionTwo '<p>Right</p>').LayoutXml
+
+        Returns a two-column layout.
+
+    .OUTPUTS
+        System.Management.Automation.PSCustomObject
+    #>
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '',
+        Justification = 'Only builds a storage-format string in memory; nothing outside the session is changed.')]
     [CmdletBinding()]
     [OutputType([pscustomobject])]
     param (
-        [Parameter(Mandatory, HelpMessage = "The name of the layout to create.")]
-        [ValidateSet("single", "two_equal", "two_left_sidebar", "two_right_sidebar", "three_equal", "three_with_sidebars")]
-        $LayoutType
+        [Parameter(Mandatory, HelpMessage = 'The name of the layout to create.')]
+        [ValidateSet('single', 'two_equal', 'two_left_sidebar', 'two_right_sidebar', 'three_equal', 'three_with_sidebars')]
+        [string]$LayoutType
     )
 
     DynamicParam {
         $paramDictionary = New-Object -TypeName System.Management.Automation.RuntimeDefinedParameterDictionary
         $variableParams = @(
-            @{Name = "SectionOne"; ParameterType = [string]; Mandatory = $true; Position = 1;  HelpMessage = "The first section in the page layout" }
-            @{Name = "SectionTwo"; ParameterType = [string]; Mandatory = $true; Position = 2;  HelpMessage = "The second section in the page layout" }
-            @{Name = "SectionThree"; ParameterType = [string]; Mandatory = $true; Position = 3;  HelpMessage = "The third section in the page layout" }
+            @{Name = "SectionOne"; ParameterType = [string]; Mandatory = $true; Position = 1; HelpMessage = "The first section in the page layout" }
+            @{Name = "SectionTwo"; ParameterType = [string]; Mandatory = $true; Position = 2; HelpMessage = "The second section in the page layout" }
+            @{Name = "SectionThree"; ParameterType = [string]; Mandatory = $true; Position = 3; HelpMessage = "The third section in the page layout" }
         )
         switch -Exact ($LayoutType) {
             "single" {
@@ -158,8 +185,8 @@ function New-ConfluencePageLayout {
         $layoutXml += "`n</ac:layout>"
 
         return [pscustomobject]@{
-            LayoutType = $LayoutType
-            LayoutXml = $layoutXml
+            LayoutType      = $LayoutType
+            LayoutXml       = $layoutXml
             ContentSections = $contentSections
         }
     }
