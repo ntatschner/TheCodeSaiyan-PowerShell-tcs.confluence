@@ -28,17 +28,37 @@ function Get-ConfluenceContext {
     [OutputType([pscustomobject])]
     param ()
 
-    if ($null -eq $script:ConfluenceContext) {
-        Write-Verbose 'No Confluence context is set. Run Set-ConfluenceContext first.'
-        return
+    $TelemetryArgs = @{
+        ModuleName    = $MyInvocation.MyCommand.Module.Name
+        ModuleVersion = [string]$MyInvocation.MyCommand.Module.Version
+        CommandName   = $MyInvocation.MyCommand.Name
+        ExecutionID   = [guid]::NewGuid().ToString()
     }
+    Invoke-TelemetryCollection @TelemetryArgs -Stage Start -ClearTimer
+    $telemetryFailed = $false
+    try {
+        if ($null -eq $script:ConfluenceContext) {
+            Write-Verbose 'No Confluence context is set. Run Set-ConfluenceContext first.'
+            return
+        }
 
-    return [pscustomobject]@{
-        OriginalConnectionURL = $script:ConfluenceContext.OriginalConnectionURL
-        ConnectionBaseURL     = $script:ConfluenceContext.ConnectionBaseURL
-        ConnectionURI         = $script:ConfluenceContext.ConnectionURI
-        ApiVersion            = $script:ConfluenceContext.ApiVersion
-        Username              = $script:ConfluenceContext.Username
-        HasCredential         = ($null -ne $script:ConfluenceCredential)
+        return [pscustomobject]@{
+            OriginalConnectionURL = $script:ConfluenceContext.OriginalConnectionURL
+            ConnectionBaseURL     = $script:ConfluenceContext.ConnectionBaseURL
+            ConnectionURI         = $script:ConfluenceContext.ConnectionURI
+            ApiVersion            = $script:ConfluenceContext.ApiVersion
+            Username              = $script:ConfluenceContext.Username
+            HasCredential         = ($null -ne $script:ConfluenceCredential)
+        }
+    }
+    catch {
+        $telemetryFailed = $true
+        Invoke-TelemetryCollection @TelemetryArgs -Stage End -Failed $true -Exception $_
+        throw
+    }
+    finally {
+        if (-not $telemetryFailed) {
+            Invoke-TelemetryCollection @TelemetryArgs -Stage End
+        }
     }
 }

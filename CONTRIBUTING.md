@@ -31,7 +31,7 @@ Invoke-ScriptAnalyzer -Path ./modules/tcs.confluence -Recurse -Settings ./PSScri
 | `modules/tcs.confluence/Private/` | Internal helpers (not exported) |
 | `modules/tcs.confluence/Public/Tests/` | Pester tests, `<Function>.Tests.ps1` |
 | `modules/tcs.confluence/Private/Tests/` | Pester tests for the private helpers |
-| `tests/` | Module-wide tests (manifest, exports, help, PSScriptAnalyzer) |
+| `tests/` | Module-wide tests (manifest, exports, help, telemetry, PSScriptAnalyzer) |
 
 Every file in `Public/` must also be listed in `FunctionsToExport` in `tcs.confluence.psd1`;
 `tests/Module.Tests.ps1` checks this.
@@ -50,6 +50,10 @@ Every file in `Public/` must also be listed in `FunctionsToExport` in `tcs.confl
   and **warnings fail the build**. Suppress a rule only with a written justification.
 - **State-changing functions** (`New-`, `Set-`, `Update-`, `Remove-` against Confluence) support
   `-WhatIf`/`-Confirm`; `Remove-` functions use `ConfirmImpact = 'High'`.
+- **Telemetry:** every exported function reports telemetry through tcs.core with the
+  `$TelemetryArgs` / `Invoke-TelemetryCollection -Stage Start` ... `-Stage End` pattern used by
+  the existing functions (a failure sends `-Stage End -Failed $true -Exception $_`).
+  `tests/Telemetry.Tests.ps1` fails for an exported function that does not.
 - **Help:** every exported function has comment-based help with a synopsis, description,
   every parameter and at least one example.
 - **Tests:** new behaviour and bug fixes come with Pester tests. Tests must not touch the real

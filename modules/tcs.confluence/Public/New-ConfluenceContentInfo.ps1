@@ -41,8 +41,17 @@ function New-ConfluenceContentInfo {
         [string]$Type = 'info'
     )
 
-    $typeName = $Type.ToLowerInvariant()
-    $InfoBlockHtml = @"
+    $TelemetryArgs = @{
+        ModuleName    = $MyInvocation.MyCommand.Module.Name
+        ModuleVersion = [string]$MyInvocation.MyCommand.Module.Version
+        CommandName   = $MyInvocation.MyCommand.Name
+        ExecutionID   = [guid]::NewGuid().ToString()
+    }
+    Invoke-TelemetryCollection @TelemetryArgs -Stage Start -ClearTimer
+    $telemetryFailed = $false
+    try {
+        $typeName = $Type.ToLowerInvariant()
+        $InfoBlockHtml = @"
 <div class="aui-message aui-message-$typeName">
     <p class="title">
         <span class="aui-icon icon-$typeName"></span>
@@ -51,5 +60,16 @@ function New-ConfluenceContentInfo {
     <p>$Content</p>
 </div>
 "@
-    return $InfoBlockHtml
+        return $InfoBlockHtml
+    }
+    catch {
+        $telemetryFailed = $true
+        Invoke-TelemetryCollection @TelemetryArgs -Stage End -Failed $true -Exception $_
+        throw
+    }
+    finally {
+        if (-not $telemetryFailed) {
+            Invoke-TelemetryCollection @TelemetryArgs -Stage End
+        }
+    }
 }

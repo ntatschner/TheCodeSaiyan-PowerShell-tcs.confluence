@@ -68,32 +68,58 @@ function Update-ConfluencePage {
         [string]$VersionMessage = 'Programmatically Updated'
     )
 
+    begin {
+        $TelemetryArgs = @{
+            ModuleName    = $MyInvocation.MyCommand.Module.Name
+            ModuleVersion = [string]$MyInvocation.MyCommand.Module.Version
+            CommandName   = $MyInvocation.MyCommand.Name
+            ExecutionID   = [guid]::NewGuid().ToString()
+        }
+        Invoke-TelemetryCollection @TelemetryArgs -Stage Start -ClearTimer
+        $telemetryFailed = $false
+    }
+
     process {
-        $body = @{
-            id      = $PageId
-            title   = $Title
-            status  = $Status
-            body    = @{
-                value          = $Content
-                representation = 'storage'
-            }
-            version = @{
-                number  = $Version
-                message = $VersionMessage
-            }
-        }
-        if ($SpaceKey) { $body.spaceId = $SpaceKey }
-
-        if (-not $PSCmdlet.ShouldProcess("Confluence page $PageId ('$Title')", "Update to version $Version")) {
-            return
-        }
-
         try {
-            $response = Invoke-ConfluenceRequest -Method PUT -Resource pages -Id $PageId -Body ($body | ConvertTo-Json -Depth 10) -MaxQueryPages 1 -ErrorAction Stop
-            return ($response.Results | Select-Object -First 1)
+            $body = @{
+                id      = $PageId
+                title   = $Title
+                status  = $Status
+                body    = @{
+                    value          = $Content
+                    representation = 'storage'
+                }
+                version = @{
+                    number  = $Version
+                    message = $VersionMessage
+                }
+            }
+            if ($SpaceKey) { $body.spaceId = $SpaceKey }
+
+            if (-not $PSCmdlet.ShouldProcess("Confluence page $PageId ('$Title')", "Update to version $Version")) {
+                return
+            }
+
+            try {
+                $response = Invoke-ConfluenceRequest -Method PUT -Resource pages -Id $PageId -Body ($body | ConvertTo-Json -Depth 10) -MaxQueryPages 1 -ErrorAction Stop
+                return ($response.Results | Select-Object -First 1)
+            }
+            catch {
+                Write-Error "Failed to update page '$PageId'. Error: $_"
+            }
         }
         catch {
-            Write-Error "Failed to update page '$PageId'. Error: $_"
+            if (-not $telemetryFailed) {
+                $telemetryFailed = $true
+                Invoke-TelemetryCollection @TelemetryArgs -Stage End -Failed $true -Exception $_
+            }
+            throw
+        }
+    }
+
+    end {
+        if (-not $telemetryFailed) {
+            Invoke-TelemetryCollection @TelemetryArgs -Stage End
         }
     }
 }

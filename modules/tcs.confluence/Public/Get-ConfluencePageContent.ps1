@@ -69,6 +69,14 @@ function Get-ConfluencePageContent {
     )
 
     $query = @{ 'body-format' = $ContentType }
+    $TelemetryArgs = @{
+        ModuleName    = $MyInvocation.MyCommand.Module.Name
+        ModuleVersion = [string]$MyInvocation.MyCommand.Module.Version
+        CommandName   = $MyInvocation.MyCommand.Name
+        ExecutionID   = [guid]::NewGuid().ToString()
+    }
+    Invoke-TelemetryCollection @TelemetryArgs -Stage Start -ClearTimer
+    $telemetryFailed = $false
     try {
         if ($PSCmdlet.ParameterSetName -eq 'ById') {
             return (Invoke-ConfluenceRequest -Method GET -Resource pages -Id $PageId -Query $query -MaxQueryPages 1 -ErrorAction Stop)
@@ -92,6 +100,13 @@ function Get-ConfluencePageContent {
         return (Invoke-ConfluenceRequest @requestParams -ErrorAction Stop)
     }
     catch {
+        $telemetryFailed = $true
+        Invoke-TelemetryCollection @TelemetryArgs -Stage End -Failed $true -Exception $_
         Write-Error "Failed to retrieve page content. Error: $_"
+    }
+    finally {
+        if (-not $telemetryFailed) {
+            Invoke-TelemetryCollection @TelemetryArgs -Stage End
+        }
     }
 }
