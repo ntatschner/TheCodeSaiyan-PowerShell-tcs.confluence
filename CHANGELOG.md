@@ -40,6 +40,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   PSScriptAnalyzer 1.23.0 lint that fails on warnings.
 - Repository standards: README, CONTRIBUTING, SECURITY, `.editorconfig`, `.gitattributes`,
   `.gitignore`, CODEOWNERS, Dependabot, issue and pull request templates.
+- Every exported command reports anonymous usage telemetry through tcs.core
+  (`Invoke-TelemetryCollection` Start/End: command name, duration, success and exception type).
+  It honours `TCS_TELEMETRY_OPTOUT` and `Set-ModuleConfig -Telemetry $false`, and never changes
+  a command's output, errors or `-WhatIf` behaviour. `tests/Telemetry.Tests.ps1` checks that
+  every exported command reports telemetry.
+- `about_tcs.confluence` help topic (`Get-Help about_tcs.confluence`).
+- Publishing workflows from tcs-shared-workflows: `create-version-tag.yml` (tags `v<version>`
+  when `ModuleVersion` increases on `main`), `generate-docs.yml` (PlatyPS help in `docs/` and
+  `en-GB/`) and `publish-to-psgallery.yml`, with `.github/PUBLISHING.md` describing the release
+  steps.
+
+### Changed
+
+- The CI workflow is named `CI Validate` (was `CI - Validate Module`), the name the tag and docs
+  workflows wait for.
 
 ### Fixed
 
