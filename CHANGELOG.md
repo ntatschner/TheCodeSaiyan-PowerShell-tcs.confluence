@@ -91,7 +91,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   It now asks for the pages with that title across all result pages and sorts by `createdAt`.
 - Builders produced invalid storage format (and allowed markup injection) for text containing
   `&` or `<`, and `New-ConfluenceContentDivider` returned an unclosed `<hr>`.
-- `New-ConfluenceContentTable` threw for hashtable rows.
+- `New-ConfluenceContentTable` threw for hashtable rows, and recursed without end on
+  self-referencing cell values (for example a `DirectoryInfo`); nested tables now stop at three
+  levels.
 - `Invoke-ConfluenceRequest`: about 90 lines of URL repair were replaced by the URL normalised by
   `Set-ConfluenceContext`.
 
