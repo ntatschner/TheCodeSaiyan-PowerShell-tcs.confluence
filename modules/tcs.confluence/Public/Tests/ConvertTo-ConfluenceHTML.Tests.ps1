@@ -38,9 +38,24 @@ Describe 'ConvertTo-ConfluenceHTML' {
             Should -BeExactly "<h1>Title</h1>`n<ul><li>item</li></ul>"
     }
 
-    It 'Converts table rows' {
+    It 'Converts a row into one table with one cell per column' {
         ConvertTo-ConfluenceHTML -InputFormat Markdown -InputContent '| a | b |' |
-            Should -BeExactly '<table><tr><td> a | b </td></tr></table>'
+            Should -BeExactly '<table><tbody><tr><td>a</td><td>b</td></tr></tbody></table>'
+    }
+
+    It 'Builds one table with a header row and skips the |---| separator' {
+        ConvertTo-ConfluenceHTML -InputFormat Markdown -InputContent "| Name | Count |`n|:---|---:|`n| a | 1 |`n| **b** | 2 |" |
+            Should -BeExactly '<table><tbody><tr><th>Name</th><th>Count</th></tr><tr><td>a</td><td>1</td></tr><tr><td><strong>b</strong></td><td>2</td></tr></tbody></table>'
+    }
+
+    It 'Escapes text so markup in the Markdown is shown as text' {
+        ConvertTo-ConfluenceHTML -InputFormat Markdown -InputContent "# T & C`nsome <b> text" |
+            Should -BeExactly "<h1>T &amp; C</h1>`nsome &lt;b&gt; text"
+    }
+
+    It 'Produces well-formed XML for a mixed document' {
+        $html = ConvertTo-ConfluenceHTML -InputFormat Markdown -InputContent "# T & C`nsome <b> text`n| a | b |`n|---|---|`n| 1 | 2 |`n- x & y`n``````n<tag>`n``````"
+        { [xml]"<root>$html</root>" } | Should -Not -Throw
     }
 
     It 'Rejects unsupported formats' {

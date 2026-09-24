@@ -35,8 +35,11 @@ try {
     $html = ConvertTo-ConfluenceHTML -InputFormat Markdown -InputContent '# Title'
     if ($html -ne '<h1>Title</h1>') { throw "ConvertTo-ConfluenceHTML returned '$html'." }
 
-    $rows = @(Get-HtmlTableRowData -HtmlContent '<table><thead><tr><th>A</th><th>B</th></tr></thead><tbody><tr><td>1</td><td>2</td></tr></tbody></table>')
-    if ($rows.Count -ne 1 -or $rows[0].B -ne '2') { throw 'Get-HtmlTableRowData did not parse the table.' }
+    $escaped = New-ConfluenceContentHeader -Header 'R&D' -Level 1
+    if ($escaped -ne '<h1>R&amp;D</h1>') { throw "New-ConfluenceContentHeader did not escape its text: '$escaped'." }
+
+    $layout = New-ConfluencePageLayout -LayoutType single -SectionOne '<p>x</p>'
+    if ($layout -isnot [string] -or $layout -notmatch '^<ac:layout>') { throw 'New-ConfluencePageLayout did not return the layout markup.' }
 
     Set-ConfluenceContext -ConfluenceUrl 'https://contoso.atlassian.net/wiki' -Username 'smoke@example.com' -PersonalAccessToken 'smoke-token'
     $context = Get-ConfluenceContext

@@ -1,6 +1,6 @@
 @{
     RootModule           = 'tcs.confluence.psm1'
-    ModuleVersion        = '0.1.1'
+    ModuleVersion        = '0.2.0'
     GUID                 = '8e75db44-4f93-4ab4-b151-06ec760efb21'
     Author               = 'Nigel Tatschner'
     CompanyName          = 'TheCodeSaiyan'
@@ -18,20 +18,21 @@
         'Get-ConfluencePage',
         'Get-ConfluencePageContent',
         'Get-ConfluenceSpace',
-        'Get-HtmlTableRowData',
         'Invoke-ConfluenceRequest',
         'Join-ConfluenceContent',
         'New-ConfluenceContentCodeBlock',
         'New-ConfluenceContentDivider',
+        'New-ConfluenceContentExpand',
         'New-ConfluenceContentHeader',
         'New-ConfluenceContentInfo',
         'New-ConfluenceContentInternalLink',
+        'New-ConfluenceContentJiraIssue',
         'New-ConfluenceContentLink',
+        'New-ConfluenceContentStatus',
         'New-ConfluenceContentTable',
         'New-ConfluenceContentTOC',
         'New-ConfluencePage',
         'New-ConfluencePageLayout',
-        'New-HtmlTable',
         'Remove-ConfluencePage',
         'Remove-DuplicateConfluencePage',
         'Set-ConfluenceContext',
