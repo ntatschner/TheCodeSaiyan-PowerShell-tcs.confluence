@@ -37,9 +37,11 @@ function Get-ConfluencePageLabel {
 
     begin {
         $telemetry = Start-TcsTelemetry
+        $lastError = $null
     }
 
     process {
+        $completed = $false
         try {
             $query = @{ limit = 250 }
             if ($Prefix) { $query.prefix = $Prefix }
@@ -50,14 +52,21 @@ function Get-ConfluencePageLabel {
             catch {
                 Write-Error "Failed to get the labels of page $PageId. Error: $_"
             }
+            $completed = $true
         }
         catch {
-            Complete-TcsTelemetry -Token $telemetry -ErrorRecord $_
+            $lastError = $_
             throw
+        }
+        finally {
+            # A stopped pipeline (Select-Object -First) or a terminating error skips the end block
+            if (-not $completed) {
+                Complete-TcsTelemetry -Token $telemetry -ErrorRecord $lastError
+            }
         }
     }
 
     end {
-        Complete-TcsTelemetry -Token $telemetry
+        Complete-TcsTelemetry -Token $telemetry -ErrorRecord $lastError
     }
 }

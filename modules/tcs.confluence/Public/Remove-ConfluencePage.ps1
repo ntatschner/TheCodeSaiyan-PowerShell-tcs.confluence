@@ -47,9 +47,11 @@ function Remove-ConfluencePage {
 
     begin {
         $telemetry = Start-TcsTelemetry
+        $lastError = $null
     }
 
     process {
+        $completed = $false
         try {
             $action = if ($Purge) { 'Remove and purge' } else { 'Remove' }
             if ($PSCmdlet.ShouldProcess("Confluence page $PageId", $action)) {
@@ -77,14 +79,21 @@ function Remove-ConfluencePage {
                     }
                 }
             }
+            $completed = $true
         }
         catch {
-            Complete-TcsTelemetry -Token $telemetry -ErrorRecord $_
+            $lastError = $_
             throw
+        }
+        finally {
+            # A stopped pipeline (Select-Object -First) or a terminating error skips the end block
+            if (-not $completed) {
+                Complete-TcsTelemetry -Token $telemetry -ErrorRecord $lastError
+            }
         }
     }
 
     end {
-        Complete-TcsTelemetry -Token $telemetry
+        Complete-TcsTelemetry -Token $telemetry -ErrorRecord $lastError
     }
 }

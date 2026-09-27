@@ -53,8 +53,10 @@ Every file in `Public/` must also be listed in `FunctionsToExport` in `tcs.confl
 - **Telemetry:** every exported function reports telemetry with the tcs.core token API:
   `$telemetry = Start-TcsTelemetry`, then the body in `try`, with
   `Complete-TcsTelemetry -Token $telemetry -ErrorRecord $_` in `catch` and
-  `Complete-TcsTelemetry -Token $telemetry` in `finally` (pipeline functions start the token in
-  `begin`, catch in `process` and complete it in `end`). Do not use `Invoke-TcsCommand`: it stops
+  `Complete-TcsTelemetry -Token $telemetry` in `finally`. Pipeline functions start the token in
+  `begin` (with `$lastError = $null`), keep the error in `$lastError` in `process`, complete the
+  token in `process`'s `finally` when the body did not finish (`$completed`), because a stopped
+  pipeline or a terminating error skips `end`, and complete it in `end` otherwise. Do not use `Invoke-TcsCommand`: it stops
   `-WarningVariable`, `-InformationVariable` and silenced `-ErrorVariable` from collecting what
   the command writes. `tests/Telemetry.Tests.ps1` fails for an exported function that does not
   follow this pattern.

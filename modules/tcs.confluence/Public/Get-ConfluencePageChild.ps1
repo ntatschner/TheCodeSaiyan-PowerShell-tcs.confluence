@@ -41,9 +41,11 @@ function Get-ConfluencePageChild {
 
     begin {
         $telemetry = Start-TcsTelemetry
+        $lastError = $null
     }
 
     process {
+        $completed = $false
         try {
             $queue = New-Object -TypeName System.Collections.Generic.Queue[string]
             $seen = New-Object -TypeName System.Collections.Generic.HashSet[string]
@@ -68,14 +70,21 @@ function Get-ConfluencePageChild {
                     }
                 }
             }
+            $completed = $true
         }
         catch {
-            Complete-TcsTelemetry -Token $telemetry -ErrorRecord $_
+            $lastError = $_
             throw
+        }
+        finally {
+            # A stopped pipeline (Select-Object -First) or a terminating error skips the end block
+            if (-not $completed) {
+                Complete-TcsTelemetry -Token $telemetry -ErrorRecord $lastError
+            }
         }
     }
 
     end {
-        Complete-TcsTelemetry -Token $telemetry
+        Complete-TcsTelemetry -Token $telemetry -ErrorRecord $lastError
     }
 }

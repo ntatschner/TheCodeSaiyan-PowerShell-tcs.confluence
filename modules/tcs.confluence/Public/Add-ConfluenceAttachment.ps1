@@ -56,12 +56,15 @@ function Add-ConfluenceAttachment {
 
     begin {
         $telemetry = Start-TcsTelemetry
+        $lastError = $null
     }
 
     process {
+        $completed = $false
         try {
             if ($null -eq $script:ConfluenceContext -or $null -eq $script:ConfluenceCredential) {
                 Write-Error 'No Confluence context is set. Run Set-ConfluenceContext first.'
+                $completed = $true
                 return
             }
             $uri = '{0}/wiki/rest/api/content/{1}/child/attachment' -f $script:ConfluenceContext.ConnectionBaseURL, [System.Uri]::EscapeDataString($PageId)
@@ -102,14 +105,21 @@ function Add-ConfluenceAttachment {
                     $payload
                 }
             }
+            $completed = $true
         }
         catch {
-            Complete-TcsTelemetry -Token $telemetry -ErrorRecord $_
+            $lastError = $_
             throw
+        }
+        finally {
+            # A stopped pipeline (Select-Object -First) or a terminating error skips the end block
+            if (-not $completed) {
+                Complete-TcsTelemetry -Token $telemetry -ErrorRecord $lastError
+            }
         }
     }
 
     end {
-        Complete-TcsTelemetry -Token $telemetry
+        Complete-TcsTelemetry -Token $telemetry -ErrorRecord $lastError
     }
 }

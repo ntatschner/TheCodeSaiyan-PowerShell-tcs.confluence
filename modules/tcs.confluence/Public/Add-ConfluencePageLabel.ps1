@@ -39,11 +39,14 @@ function Add-ConfluencePageLabel {
 
     begin {
         $telemetry = Start-TcsTelemetry
+        $lastError = $null
     }
 
     process {
+        $completed = $false
         try {
             if (-not $PSCmdlet.ShouldProcess("Confluence page $PageId", "Add label(s) $($Label -join ', ')")) {
+                $completed = $true
                 return
             }
             $labels = @(foreach ($name in $Label) { [ordered]@{ prefix = 'global'; name = $name } })
@@ -55,14 +58,21 @@ function Add-ConfluencePageLabel {
             catch {
                 Write-Error "Failed to add labels to page $PageId. Error: $_"
             }
+            $completed = $true
         }
         catch {
-            Complete-TcsTelemetry -Token $telemetry -ErrorRecord $_
+            $lastError = $_
             throw
+        }
+        finally {
+            # A stopped pipeline (Select-Object -First) or a terminating error skips the end block
+            if (-not $completed) {
+                Complete-TcsTelemetry -Token $telemetry -ErrorRecord $lastError
+            }
         }
     }
 
     end {
-        Complete-TcsTelemetry -Token $telemetry
+        Complete-TcsTelemetry -Token $telemetry -ErrorRecord $lastError
     }
 }

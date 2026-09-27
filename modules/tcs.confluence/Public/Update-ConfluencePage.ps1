@@ -80,12 +80,15 @@ function Update-ConfluencePage {
 
     begin {
         $telemetry = Start-TcsTelemetry
+        $lastError = $null
     }
 
     process {
+        $completed = $false
         try {
             $versionText = if ($Version) { "version $Version" } else { 'the next version' }
             if (-not $PSCmdlet.ShouldProcess("Confluence page $PageId ('$Title')", "Update to $versionText")) {
+                $completed = $true
                 return
             }
 
@@ -96,10 +99,12 @@ function Update-ConfluencePage {
                 }
                 catch {
                     Write-Error "Failed to read the current version of page '$PageId'. Error: $_"
+                    $completed = $true
                     return
                 }
                 if (-not $current -or -not $current.version -or -not $current.version.number) {
                     Write-Error "Could not read the current version number of page '$PageId'. Pass -Version."
+                    $completed = $true
                     return
                 }
                 $newVersion = [int]$current.version.number + 1
@@ -125,25 +130,35 @@ function Update-ConfluencePage {
                 }
                 catch {
                     Write-Error "Failed to update page '$PageId': $($_.Exception.Message)"
+                    $completed = $true
                     return
                 }
             }
 
             try {
                 $response = Invoke-ConfluenceRequest -Method PUT -Resource pages -ApiVersion 2 -Id $PageId -Body ($body | ConvertTo-Json -Depth 10) -MaxQueryPages 1 -ErrorAction Stop
-                return ($response.Results | Select-Object -First 1)
+                ($response.Results | Select-Object -First 1)
+                $completed = $true
+                return
             }
             catch {
                 Write-Error "Failed to update page '$PageId'. Error: $_"
             }
+            $completed = $true
         }
         catch {
-            Complete-TcsTelemetry -Token $telemetry -ErrorRecord $_
+            $lastError = $_
             throw
+        }
+        finally {
+            # A stopped pipeline (Select-Object -First) or a terminating error skips the end block
+            if (-not $completed) {
+                Complete-TcsTelemetry -Token $telemetry -ErrorRecord $lastError
+            }
         }
     }
 
     end {
-        Complete-TcsTelemetry -Token $telemetry
+        Complete-TcsTelemetry -Token $telemetry -ErrorRecord $lastError
     }
 }

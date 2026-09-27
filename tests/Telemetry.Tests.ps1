@@ -26,8 +26,16 @@ Describe 'Telemetry coverage for <Name>' -ForEach $ExportedFunctions {
     It 'Starts and completes a tcs.core telemetry token' {
         $definition = (Get-Command -Name $Name -Module tcs.confluence).Definition
         $definition | Should -Match '\$telemetry\s*=\s*Start-TcsTelemetry'
-        $definition | Should -Match 'Complete-TcsTelemetry\s+-Token\s+\$telemetry\s+-ErrorRecord'
-        $definition | Should -Match 'Complete-TcsTelemetry\s+-Token\s+\$telemetry\s*[\r\n]'
+        if ($definition -match '(?m)^\s*process\s*\{') {
+            # Pipeline commands also complete the token in process when the end block will not run
+            # (a stopped pipeline or a terminating error)
+            $definition | Should -Match 'if\s*\(-not \$completed\)\s*\{\s*Complete-TcsTelemetry\s+-Token\s+\$telemetry\s+-ErrorRecord\s+\$lastError'
+            $definition | Should -Match '(?s)end\s*\{\s*Complete-TcsTelemetry\s+-Token\s+\$telemetry\s+-ErrorRecord\s+\$lastError\s*\}'
+        }
+        else {
+            $definition | Should -Match 'Complete-TcsTelemetry\s+-Token\s+\$telemetry\s+-ErrorRecord'
+            $definition | Should -Match 'finally\s*\{\s*Complete-TcsTelemetry\s+-Token\s+\$telemetry\s*\}'
+        }
         $definition | Should -Not -Match 'Invoke-TelemetryCollection'
         $definition | Should -Not -Match 'Invoke-TcsCommand'
     }
@@ -110,6 +118,20 @@ Describe 'Telemetry behaviour' {
         }
         Should -Invoke -ModuleName tcs.core Invoke-TelemetryCollection -Times 1 -Exactly -ParameterFilter {
             $CommandName -eq 'Remove-ConfluencePage' -and $Stage -eq 'End' -and -not $Failed
+        }
+    }
+
+    It 'Get-ConfluencePageChild piped into Select-Object -First 1 still sends exactly one End' {
+        Mock -ModuleName tcs.confluence Invoke-WebRequest {
+            [pscustomobject]@{ StatusCode = 200; StatusDescription = 'OK'; Content = '{"results":[{"id":"10"},{"id":"11"}],"_links":{}}' }
+        }
+        $first = @([pscustomobject]@{ id = '1' }, [pscustomobject]@{ id = '2' }) | Get-ConfluencePageChild | Select-Object -First 1
+        @($first).Count | Should -Be 1
+        Should -Invoke -ModuleName tcs.core Invoke-TelemetryCollection -Times 1 -Exactly -ParameterFilter {
+            $CommandName -eq 'Get-ConfluencePageChild' -and $Stage -eq 'Start'
+        }
+        Should -Invoke -ModuleName tcs.core Invoke-TelemetryCollection -Times 1 -Exactly -ParameterFilter {
+            $CommandName -eq 'Get-ConfluencePageChild' -and $Stage -eq 'End' -and -not $Failed
         }
     }
 
