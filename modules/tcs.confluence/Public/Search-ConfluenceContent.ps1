@@ -65,14 +65,7 @@ function Search-ConfluenceContent {
         [string[]]$Expand
     )
 
-    $TelemetryArgs = @{
-        ModuleName    = $MyInvocation.MyCommand.Module.Name
-        ModuleVersion = [string]$MyInvocation.MyCommand.Module.Version
-        CommandName   = $MyInvocation.MyCommand.Name
-        ExecutionID   = [guid]::NewGuid().ToString()
-    }
-    Invoke-TelemetryCollection @TelemetryArgs -Stage Start -ClearTimer
-    $telemetryFailed = $false
+    $telemetry = Start-TcsTelemetry
     try {
         $query = @{ cql = $Cql; limit = $Limit }
         if ($Expand) { $query.expand = $Expand -join ',' }
@@ -80,13 +73,10 @@ function Search-ConfluenceContent {
         foreach ($result in @($response.Results)) { $result }
     }
     catch {
-        $telemetryFailed = $true
-        Invoke-TelemetryCollection @TelemetryArgs -Stage End -Failed $true -Exception $_
+        Complete-TcsTelemetry -Token $telemetry -ErrorRecord $_
         Write-Error "Confluence search failed. Error: $_"
     }
     finally {
-        if (-not $telemetryFailed) {
-            Invoke-TelemetryCollection @TelemetryArgs -Stage End
-        }
+        Complete-TcsTelemetry -Token $telemetry
     }
 }

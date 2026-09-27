@@ -73,14 +73,7 @@ function New-ConfluencePageLayout {
         [hashtable[]]$Section
     )
 
-    $TelemetryArgs = @{
-        ModuleName    = $MyInvocation.MyCommand.Module.Name
-        ModuleVersion = [string]$MyInvocation.MyCommand.Module.Version
-        CommandName   = $MyInvocation.MyCommand.Name
-        ExecutionID   = [guid]::NewGuid().ToString()
-    }
-    Invoke-TelemetryCollection @TelemetryArgs -Stage Start -ClearTimer
-    $telemetryFailed = $false
+    $telemetry = Start-TcsTelemetry
     try {
         $cellCounts = @{
             single              = 1
@@ -125,13 +118,10 @@ function New-ConfluencePageLayout {
         return $markup
     }
     catch {
-        $telemetryFailed = $true
-        Invoke-TelemetryCollection @TelemetryArgs -Stage End -Failed $true -Exception $_
+        Complete-TcsTelemetry -Token $telemetry -ErrorRecord $_
         throw
     }
     finally {
-        if (-not $telemetryFailed) {
-            Invoke-TelemetryCollection @TelemetryArgs -Stage End
-        }
+        Complete-TcsTelemetry -Token $telemetry
     }
 }

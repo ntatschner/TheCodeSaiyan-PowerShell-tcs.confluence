@@ -34,17 +34,12 @@ function Remove-ConfluencePageLabel {
     )
 
     begin {
-        $TelemetryArgs = @{
-            ModuleName    = $MyInvocation.MyCommand.Module.Name
-            ModuleVersion = [string]$MyInvocation.MyCommand.Module.Version
-            CommandName   = $MyInvocation.MyCommand.Name
-            ExecutionID   = [guid]::NewGuid().ToString()
-        }
-        Invoke-TelemetryCollection @TelemetryArgs -Stage Start -ClearTimer
-        $telemetryFailed = $false
+        $telemetry = Start-TcsTelemetry
+        $lastError = $null
     }
 
     process {
+        $completed = $false
         try {
             foreach ($name in $Label) {
                 if (-not $PSCmdlet.ShouldProcess("Confluence page $PageId", "Remove label '$name'")) {
@@ -58,19 +53,21 @@ function Remove-ConfluencePageLabel {
                     Write-Error "Failed to remove label '$name' from page $PageId. Error: $_"
                 }
             }
+            $completed = $true
         }
         catch {
-            if (-not $telemetryFailed) {
-                $telemetryFailed = $true
-                Invoke-TelemetryCollection @TelemetryArgs -Stage End -Failed $true -Exception $_
-            }
+            $lastError = $_
             throw
+        }
+        finally {
+            # A stopped pipeline (Select-Object -First) or a terminating error skips the end block
+            if (-not $completed) {
+                Complete-TcsTelemetry -Token $telemetry -ErrorRecord $lastError
+            }
         }
     }
 
     end {
-        if (-not $telemetryFailed) {
-            Invoke-TelemetryCollection @TelemetryArgs -Stage End
-        }
+        Complete-TcsTelemetry -Token $telemetry -ErrorRecord $lastError
     }
 }

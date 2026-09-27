@@ -7,7 +7,7 @@ SHORT DESCRIPTION
 
 LONG DESCRIPTION
     tcs.confluence is part of the TheCodeSaiyan PowerShell suite and needs
-    tcs.core 0.3.0 or later. It has two groups of commands:
+    tcs.core 0.4.0 or later. It has two groups of commands:
 
     - REST commands that read, create, update and delete Confluence Cloud
       pages, search with CQL, read spaces and manage labels and attachments.
@@ -113,13 +113,13 @@ ENVIRONMENT VARIABLES
     TCS_CONFIG_ROOT          Moves the settings folder.
 
 TELEMETRY
-    tcs.confluence sends anonymous usage events through tcs.core
-    Invoke-TelemetryCollection: one when the module loads and one each time an
-    exported command runs (command name, duration, success, exception type,
-    PowerShell and OS version and a random installation ID). No user, machine,
-    path or error text is sent, and no command arguments, Confluence URLs,
-    page content or credentials. Nothing is sent until a TelemetryUri is
-    configured.
+    tcs.confluence sends anonymous usage events through tcs.core: one when the
+    module loads and one each time an exported command runs (command name,
+    duration, success, exception type, PowerShell and OS version and a random
+    installation ID). When a command calls another tcs.confluence command, only
+    the outer command is recorded. No user, machine, path or error text is
+    sent, and no command arguments, Confluence URLs, page content or
+    credentials. Nothing is sent until a TelemetryUri is configured.
 
     Turn it off for this module with:
 

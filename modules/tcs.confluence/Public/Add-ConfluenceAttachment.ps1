@@ -55,20 +55,16 @@ function Add-ConfluenceAttachment {
     )
 
     begin {
-        $TelemetryArgs = @{
-            ModuleName    = $MyInvocation.MyCommand.Module.Name
-            ModuleVersion = [string]$MyInvocation.MyCommand.Module.Version
-            CommandName   = $MyInvocation.MyCommand.Name
-            ExecutionID   = [guid]::NewGuid().ToString()
-        }
-        Invoke-TelemetryCollection @TelemetryArgs -Stage Start -ClearTimer
-        $telemetryFailed = $false
+        $telemetry = Start-TcsTelemetry
+        $lastError = $null
     }
 
     process {
+        $completed = $false
         try {
             if ($null -eq $script:ConfluenceContext -or $null -eq $script:ConfluenceCredential) {
                 Write-Error 'No Confluence context is set. Run Set-ConfluenceContext first.'
+                $completed = $true
                 return
             }
             $uri = '{0}/wiki/rest/api/content/{1}/child/attachment' -f $script:ConfluenceContext.ConnectionBaseURL, [System.Uri]::EscapeDataString($PageId)
@@ -109,19 +105,21 @@ function Add-ConfluenceAttachment {
                     $payload
                 }
             }
+            $completed = $true
         }
         catch {
-            if (-not $telemetryFailed) {
-                $telemetryFailed = $true
-                Invoke-TelemetryCollection @TelemetryArgs -Stage End -Failed $true -Exception $_
-            }
+            $lastError = $_
             throw
+        }
+        finally {
+            # A stopped pipeline (Select-Object -First) or a terminating error skips the end block
+            if (-not $completed) {
+                Complete-TcsTelemetry -Token $telemetry -ErrorRecord $lastError
+            }
         }
     }
 
     end {
-        if (-not $telemetryFailed) {
-            Invoke-TelemetryCollection @TelemetryArgs -Stage End
-        }
+        Complete-TcsTelemetry -Token $telemetry -ErrorRecord $lastError
     }
 }

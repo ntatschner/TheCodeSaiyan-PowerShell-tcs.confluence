@@ -19,14 +19,7 @@ function Clear-ConfluenceContext {
     [CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Low')]
     param ()
 
-    $TelemetryArgs = @{
-        ModuleName    = $MyInvocation.MyCommand.Module.Name
-        ModuleVersion = [string]$MyInvocation.MyCommand.Module.Version
-        CommandName   = $MyInvocation.MyCommand.Name
-        ExecutionID   = [guid]::NewGuid().ToString()
-    }
-    Invoke-TelemetryCollection @TelemetryArgs -Stage Start -ClearTimer
-    $telemetryFailed = $false
+    $telemetry = Start-TcsTelemetry
     try {
         $target = if ($script:ConfluenceContext) { $script:ConfluenceContext.ConnectionBaseURL } else { 'Confluence context' }
         if (-not $PSCmdlet.ShouldProcess($target, 'Clear Confluence context')) {
@@ -38,13 +31,10 @@ function Clear-ConfluenceContext {
         Write-Verbose 'Confluence context cleared.'
     }
     catch {
-        $telemetryFailed = $true
-        Invoke-TelemetryCollection @TelemetryArgs -Stage End -Failed $true -Exception $_
+        Complete-TcsTelemetry -Token $telemetry -ErrorRecord $_
         throw
     }
     finally {
-        if (-not $telemetryFailed) {
-            Invoke-TelemetryCollection @TelemetryArgs -Stage End
-        }
+        Complete-TcsTelemetry -Token $telemetry
     }
 }

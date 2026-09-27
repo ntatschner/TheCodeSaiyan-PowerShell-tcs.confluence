@@ -57,6 +57,13 @@ Describe 'Invoke-ConfluenceRequest' {
             Should -Invoke -ModuleName tcs.confluence Invoke-WebRequest -Times 1 -Exactly -ParameterFilter { $Uri.OriginalString -eq $Expected }
         }
 
+        It 'Sends a query parameter named keys (it must not be read as the hashtable Keys property)' {
+            $null = Invoke-ConfluenceRequest -Method GET -Resource spaces -Query @{ keys = 'DOCS'; limit = 5 }
+            Should -Invoke -ModuleName tcs.confluence Invoke-WebRequest -Times 1 -Exactly -ParameterFilter {
+                $Uri.OriginalString -eq 'https://contoso.atlassian.net/wiki/api/v2/spaces?keys=DOCS&limit=5'
+            }
+        }
+
         It 'Sends a wildcard page title search to the documented CQL endpoint content/search' {
             $null = Invoke-ConfluenceRequest -Method GET -Resource pages -Search 'Test*'
             Should -Invoke -ModuleName tcs.confluence Invoke-WebRequest -Times 1 -Exactly -ParameterFilter {
@@ -172,7 +179,8 @@ Describe 'Invoke-ConfluenceRequest' {
 
     Context 'Rate limiting' {
         BeforeEach {
-            Mock -ModuleName tcs.confluence Start-Sleep { }
+            # Invoke-WithRetry sleeps in the tcs.core module scope
+            Mock -ModuleName tcs.core Start-Sleep { }
         }
 
         It 'Retries a 429 response after the Retry-After delay' {
@@ -187,7 +195,7 @@ Describe 'Invoke-ConfluenceRequest' {
             $result = Invoke-ConfluenceRequest -Method GET -Resource pages -ErrorAction Stop
             @($result.Results).Count | Should -Be 1
             Should -Invoke -ModuleName tcs.confluence Invoke-WebRequest -Times 2 -Exactly
-            Should -Invoke -ModuleName tcs.confluence Start-Sleep -Times 1 -Exactly -ParameterFilter { $Milliseconds -eq 3000 }
+            Should -Invoke -ModuleName tcs.core Start-Sleep -Times 1 -Exactly -ParameterFilter { $Milliseconds -eq 3000 }
         }
 
         It 'Gives up after four retries and reports the 429' {
@@ -196,7 +204,33 @@ Describe 'Invoke-ConfluenceRequest' {
             }
             { Invoke-ConfluenceRequest -Method GET -Resource pages -ErrorAction Stop } | Should -Throw -ExpectedMessage '*429*'
             Should -Invoke -ModuleName tcs.confluence Invoke-WebRequest -Times 5 -Exactly
-            Should -Invoke -ModuleName tcs.confluence Start-Sleep -Times 4 -Exactly
+            Should -Invoke -ModuleName tcs.core Start-Sleep -Times 4 -Exactly
+        }
+
+        It 'Reports the last 429 with the same message as any other failed request' {
+            Mock -ModuleName tcs.confluence Invoke-WebRequest {
+                [pscustomobject]@{ StatusCode = 429; StatusDescription = 'Too Many Requests'; Content = '{"message":"Rate limit exceeded"}' }
+            }
+            { Invoke-ConfluenceRequest -Method GET -Resource pages -ErrorAction Stop } |
+                Should -Throw -ExpectedMessage 'Failed request. Status: 429 Too Many Requests Errors: Rate limit exceeded URL: https://contoso.atlassian.net/wiki/api/v2/pages'
+        }
+
+        It 'Does not retry a 500 and reports it unchanged' {
+            Mock -ModuleName tcs.confluence Invoke-WebRequest {
+                [pscustomobject]@{ StatusCode = 500; StatusDescription = 'Internal Server Error'; Content = '{"errors":[{"title":"Boom"}]}' }
+            }
+            { Invoke-ConfluenceRequest -Method GET -Resource pages -ErrorAction Stop } |
+                Should -Throw -ExpectedMessage 'Failed request. Status: 500 Internal Server Error Errors: Boom URL: https://contoso.atlassian.net/wiki/api/v2/pages'
+            Should -Invoke -ModuleName tcs.confluence Invoke-WebRequest -Times 1 -Exactly
+            Should -Invoke -ModuleName tcs.core Start-Sleep -Times 0 -Exactly
+        }
+
+        It 'Reports a transport failure without retrying it' {
+            Mock -ModuleName tcs.confluence Invoke-WebRequest { throw 'No such host is known.' }
+            { Invoke-ConfluenceRequest -Method GET -Resource pages -ErrorAction Stop } |
+                Should -Throw -ExpectedMessage 'Request to https://contoso.atlassian.net/wiki/api/v2/pages failed. No such host is known.'
+            Should -Invoke -ModuleName tcs.confluence Invoke-WebRequest -Times 1 -Exactly
+            Should -Invoke -ModuleName tcs.core Start-Sleep -Times 0 -Exactly
         }
     }
 

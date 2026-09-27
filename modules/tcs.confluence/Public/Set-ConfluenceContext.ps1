@@ -73,14 +73,7 @@ function Set-ConfluenceContext {
         [string]$ApiVersion = 'v2'
     )
 
-    $TelemetryArgs = @{
-        ModuleName    = $MyInvocation.MyCommand.Module.Name
-        ModuleVersion = [string]$MyInvocation.MyCommand.Module.Version
-        CommandName   = $MyInvocation.MyCommand.Name
-        ExecutionID   = [guid]::NewGuid().ToString()
-    }
-    Invoke-TelemetryCollection @TelemetryArgs -Stage Start -ClearTimer
-    $telemetryFailed = $false
+    $telemetry = Start-TcsTelemetry
     try {
         # --- Normalise the base URL ---
         $raw = $ConfluenceUrl.Trim().TrimEnd('/')
@@ -113,13 +106,10 @@ function Set-ConfluenceContext {
         Write-Verbose "Confluence context set. Base='$normalized' API='$apiSuffix' User='$($Credential.UserName)'"
     }
     catch {
-        $telemetryFailed = $true
-        Invoke-TelemetryCollection @TelemetryArgs -Stage End -Failed $true -Exception $_
+        Complete-TcsTelemetry -Token $telemetry -ErrorRecord $_
         throw
     }
     finally {
-        if (-not $telemetryFailed) {
-            Invoke-TelemetryCollection @TelemetryArgs -Stage End
-        }
+        Complete-TcsTelemetry -Token $telemetry
     }
 }

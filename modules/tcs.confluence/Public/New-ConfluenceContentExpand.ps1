@@ -42,14 +42,7 @@ function New-ConfluenceContentExpand {
         [switch]$Raw
     )
 
-    $TelemetryArgs = @{
-        ModuleName    = $MyInvocation.MyCommand.Module.Name
-        ModuleVersion = [string]$MyInvocation.MyCommand.Module.Version
-        CommandName   = $MyInvocation.MyCommand.Name
-        ExecutionID   = [guid]::NewGuid().ToString()
-    }
-    Invoke-TelemetryCollection @TelemetryArgs -Stage Start -ClearTimer
-    $telemetryFailed = $false
+    $telemetry = Start-TcsTelemetry
     try {
         $bodyMarkup = if ($Raw) { $Content } else { '<p>' + (ConvertTo-ConfluenceXmlText -Text $Content) + '</p>' }
         $markup = '<ac:structured-macro ac:name="expand">'
@@ -60,13 +53,10 @@ function New-ConfluenceContentExpand {
         return $markup
     }
     catch {
-        $telemetryFailed = $true
-        Invoke-TelemetryCollection @TelemetryArgs -Stage End -Failed $true -Exception $_
+        Complete-TcsTelemetry -Token $telemetry -ErrorRecord $_
         throw
     }
     finally {
-        if (-not $telemetryFailed) {
-            Invoke-TelemetryCollection @TelemetryArgs -Stage End
-        }
+        Complete-TcsTelemetry -Token $telemetry
     }
 }

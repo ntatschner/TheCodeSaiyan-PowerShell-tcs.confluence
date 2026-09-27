@@ -11,7 +11,7 @@ Jira issues, layouts and tables of contents). Part of the TheCodeSaiyan tcs suit
 ## Requirements
 
 - Windows PowerShell 5.1 or PowerShell 7 on Windows, Linux or macOS
-- [tcs.core](https://www.powershellgallery.com/packages/tcs.core) 0.3.0 or later (installed
+- [tcs.core](https://www.powershellgallery.com/packages/tcs.core) 0.4.0 or later (installed
   automatically from the PowerShell Gallery as a dependency)
 - For the REST commands: a Confluence Cloud site, an account e-mail address and an
   [API token](https://id.atlassian.com/manage-profile/security/api-tokens)
@@ -26,7 +26,7 @@ From source:
 
 ```powershell
 git clone https://github.com/ntatschner/TheCodeSaiyan-PowerShell-tcs.confluence.git
-Install-Module -Name tcs.core -MinimumVersion 0.3.0 -Scope CurrentUser
+Install-Module -Name tcs.core -MinimumVersion 0.4.0 -Scope CurrentUser
 Import-Module ./TheCodeSaiyan-PowerShell-tcs.confluence/modules/tcs.confluence/tcs.confluence.psd1
 ```
 
@@ -135,8 +135,10 @@ for all settings and environment variables.
 ## Privacy and telemetry
 
 tcs modules send anonymous usage telemetry to help find failing commands. tcs.confluence records
-one event when the module is loaded and one each time an exported command runs. Telemetry is on by default and a notice is shown the first
-time a module is loaded. Nothing is sent until a telemetry endpoint is configured.
+one event when the module is loaded and one each time an exported command runs; when a command
+calls another tcs.confluence command (for example `Get-ConfluencePage` calling
+`Invoke-ConfluenceRequest`), only the outer command is recorded. Telemetry is on by default and a
+notice is shown the first time a module is loaded. Nothing is sent until a telemetry endpoint is configured.
 
 Each event contains: time (UTC), module and command name, module version, duration, success,
 the exception **type** on failure, PowerShell version and edition, OS family, PowerShell host

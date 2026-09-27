@@ -80,20 +80,16 @@ function New-ConfluencePage {
     )
 
     begin {
-        $TelemetryArgs = @{
-            ModuleName    = $MyInvocation.MyCommand.Module.Name
-            ModuleVersion = [string]$MyInvocation.MyCommand.Module.Version
-            CommandName   = $MyInvocation.MyCommand.Name
-            ExecutionID   = [guid]::NewGuid().ToString()
-        }
-        Invoke-TelemetryCollection @TelemetryArgs -Stage Start -ClearTimer
-        $telemetryFailed = $false
+        $telemetry = Start-TcsTelemetry
+        $lastError = $null
     }
 
     process {
+        $completed = $false
         try {
             Write-Verbose "Creating Confluence page '$Title' in space '$SpaceId' with parent ID '$ParentId'"
             if (-not $PSCmdlet.ShouldProcess("Confluence page '$Title' in space $SpaceId", 'Create')) {
+                $completed = $true
                 return
             }
             try {
@@ -101,6 +97,7 @@ function New-ConfluencePage {
             }
             catch {
                 Write-Error "Failed to create page '$Title': $($_.Exception.Message)"
+                $completed = $true
                 return
             }
 
@@ -119,7 +116,9 @@ function New-ConfluencePage {
                 $response = Invoke-ConfluenceRequest -Method POST -Resource pages -ApiVersion 2 -Body ($body | ConvertTo-Json -Depth 10) -MaxQueryPages 1 -ErrorAction Stop
                 $page = $response.Results | Select-Object -First 1
                 Write-Verbose "Created page with ID: $($page.id)"
-                return $page
+                $page
+                $completed = $true
+                return
             }
             catch {
                 $createError = $_
@@ -128,6 +127,7 @@ function New-ConfluencePage {
             $alreadyExists = "$createError" -match '(?i)already exists'
             if ($alreadyExists -and -not $Force) {
                 Write-Error "Failed to create page '$Title': a page with this title already exists. Use -Force to update it. $createError"
+                $completed = $true
                 return
             }
 
@@ -142,6 +142,7 @@ function New-ConfluencePage {
                 Write-Verbose "Page lookup after the failed create did not succeed: $lookupError"
                 if ($alreadyExists) {
                     Write-Error "Confluence reports that page '$Title' already exists, but it could not be identified safely: $lookupError"
+                    $completed = $true
                     return
                 }
             }
@@ -149,14 +150,18 @@ function New-ConfluencePage {
             if (-not $alreadyExists) {
                 if ($existingPage -and "$($existingPage.parentId)" -eq $ParentId) {
                     Write-Warning "Confluence reported an error, but page '$Title' (ID $($existingPage.id)) exists under parent $ParentId; returning it. Error: $createError"
-                    return $existingPage
+                    $existingPage
+                    $completed = $true
+                    return
                 }
                 Write-Error "Failed to create page '$Title'. Error: $createError"
+                $completed = $true
                 return
             }
 
             if (-not $existingPage -or -not $existingPage.id) {
                 Write-Error "Confluence reports that page '$Title' already exists, but no page with exactly that title was found in space '$resolvedSpaceId'. Error: $createError"
+                $completed = $true
                 return
             }
 
@@ -166,24 +171,28 @@ function New-ConfluencePage {
             }
             Write-Verbose "Page '$Title' already exists (ID $($existingPage.id)); updating it to version $newVersion."
             try {
-                return (Update-ConfluencePage -PageId $existingPage.id -Title $Title -Status $Status -Content $Content -Version $newVersion -ErrorAction Stop)
+                (Update-ConfluencePage -PageId $existingPage.id -Title $Title -Status $Status -Content $Content -Version $newVersion -ErrorAction Stop)
+                $completed = $true
+                return
             }
             catch {
                 Write-Error "Failed to update existing page '$Title' (ID $($existingPage.id)). Error: $_"
             }
+            $completed = $true
         }
         catch {
-            if (-not $telemetryFailed) {
-                $telemetryFailed = $true
-                Invoke-TelemetryCollection @TelemetryArgs -Stage End -Failed $true -Exception $_
-            }
+            $lastError = $_
             throw
+        }
+        finally {
+            # A stopped pipeline (Select-Object -First) or a terminating error skips the end block
+            if (-not $completed) {
+                Complete-TcsTelemetry -Token $telemetry -ErrorRecord $lastError
+            }
         }
     }
 
     end {
-        if (-not $telemetryFailed) {
-            Invoke-TelemetryCollection @TelemetryArgs -Stage End
-        }
+        Complete-TcsTelemetry -Token $telemetry -ErrorRecord $lastError
     }
 }

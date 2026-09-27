@@ -25,7 +25,7 @@ permissions:
 env:
   PESTER_VERSION: '5.7.1'
   PSSA_VERSION: '1.23.0'
-  TCS_CORE_MIN_VERSION: '0.3.0'
+  TCS_CORE_MIN_VERSION: '0.4.0'
   # Keep test runs offline and side-effect free
   TCS_SKIP_UPDATE_CHECK: '1'
   TCS_TELEMETRY_OPTOUT: '1'
