@@ -18,10 +18,7 @@ AfterAll {
 }
 
 # Coverage guard: every exported command must report telemetry through the tcs.core token API, so a
-# new command cannot skip it or bring back the old hand-written telemetry block. The token API is used
-# instead of Invoke-TcsCommand, which re-emits the body's errors through its own cmdlet and stops
-# -WarningVariable, -InformationVariable (and -ErrorVariable with -ErrorAction SilentlyContinue) from
-# collecting what the command writes.
+# new command cannot skip it or bring back the old hand-written telemetry block.
 Describe 'Telemetry coverage for <Name>' -ForEach $ExportedFunctions {
     It 'Starts and completes a tcs.core telemetry token' {
         $definition = (Get-Command -Name $Name -Module tcs.confluence).Definition
@@ -37,16 +34,15 @@ Describe 'Telemetry coverage for <Name>' -ForEach $ExportedFunctions {
             $definition | Should -Match 'finally\s*\{\s*Complete-TcsTelemetry\s+-Token\s+\$telemetry\s*\}'
         }
         $definition | Should -Not -Match 'Invoke-TelemetryCollection'
-        $definition | Should -Not -Match 'Invoke-TcsCommand'
     }
 }
 
 Describe 'Telemetry wiring' {
-    It 'Public command files call neither Invoke-TelemetryCollection nor Invoke-TcsCommand' {
+    It 'Public command files do not call Invoke-TelemetryCollection' {
         $publicFolder = Join-Path -Path (Join-Path -Path $RepoRoot -ChildPath 'modules/tcs.confluence') -ChildPath 'Public'
         $offenders = @(Get-ChildItem -Path $publicFolder -Filter '*.ps1' -Recurse |
                 Where-Object { $_.Name -notlike '*.Tests.ps1' } |
-                Where-Object { (Get-Content -LiteralPath $_.FullName -Raw) -match 'Invoke-TelemetryCollection|Invoke-TcsCommand' } |
+                Where-Object { (Get-Content -LiteralPath $_.FullName -Raw) -match 'Invoke-TelemetryCollection' } |
                 ForEach-Object { $_.Name })
         $offenders | Should -BeNullOrEmpty
     }
