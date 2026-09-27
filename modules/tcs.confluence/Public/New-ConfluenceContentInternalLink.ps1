@@ -91,14 +91,7 @@ function New-ConfluenceContentInternalLink {
         [string]$LinkText
     )
 
-    $TelemetryArgs = @{
-        ModuleName    = $MyInvocation.MyCommand.Module.Name
-        ModuleVersion = [string]$MyInvocation.MyCommand.Module.Version
-        CommandName   = $MyInvocation.MyCommand.Name
-        ExecutionID   = [guid]::NewGuid().ToString()
-    }
-    Invoke-TelemetryCollection @TelemetryArgs -Stage Start -ClearTimer
-    $telemetryFailed = $false
+    $telemetry = Start-TcsTelemetry
     try {
         $page = $null
         if ($PSCmdlet.ParameterSetName -eq 'InternalLinkPageId') {
@@ -165,13 +158,10 @@ function New-ConfluenceContentInternalLink {
         return ("<a href='{0}'>{1}</a>" -f (ConvertTo-ConfluenceXmlText -Text $Link -Attribute), (ConvertTo-ConfluenceXmlText -Text $LinkText))
     }
     catch {
-        $telemetryFailed = $true
-        Invoke-TelemetryCollection @TelemetryArgs -Stage End -Failed $true -Exception $_
+        Complete-TcsTelemetry -Token $telemetry -ErrorRecord $_
         throw
     }
     finally {
-        if (-not $telemetryFailed) {
-            Invoke-TelemetryCollection @TelemetryArgs -Stage End
-        }
+        Complete-TcsTelemetry -Token $telemetry
     }
 }
