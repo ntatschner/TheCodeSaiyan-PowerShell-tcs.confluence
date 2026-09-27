@@ -41,8 +41,10 @@ Describe 'Set-ConfluenceContext and Get-ConfluenceContext' {
         $credential = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList 'cred@contoso.com', $secure
         Set-ConfluenceContext -ConfluenceUrl 'https://contoso.atlassian.net' -Credential $credential
         (Get-ConfluenceContext).Username | Should -Be 'cred@contoso.com'
-        InModuleScope tcs.confluence { (Get-ConfluenceAuthHeader).Authorization } |
-            Should -Be ('Basic ' + [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes('cred@contoso.com:cred-token')))
+        Mock -ModuleName tcs.confluence Invoke-WebRequest { [pscustomobject]@{ StatusCode = 200; StatusDescription = 'OK'; Content = '{"results":[]}' } }
+        $null = Invoke-ConfluenceRequest -Method GET -Resource pages
+        $expected = 'Basic ' + [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes('cred@contoso.com:cred-token'))
+        Should -Invoke -ModuleName tcs.confluence Invoke-WebRequest -Times 1 -Exactly -ParameterFilter { $Headers.Authorization -eq $expected }
     }
 
     It 'Never exposes the token' {
