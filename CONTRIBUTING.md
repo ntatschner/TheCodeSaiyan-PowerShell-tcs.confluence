@@ -1,18 +1,18 @@
 # Contributing to tcs.confluence
 
 tcs.confluence is part of the tcs PowerShell suite and depends on
-[tcs.core](https://github.com/ntatschner/TheCodeSaiyan-PowerShell-tcs.core) (0.3.0 or later) for
+[tcs.core](https://github.com/ntatschner/TheCodeSaiyan-PowerShell-tcs.core) (0.4.0 or later) for
 configuration, update checks and telemetry.
 
 ## Getting started
 
 Requirements: PowerShell 7.2+ for development, Pester 5.7.1, PSScriptAnalyzer 1.23.0 and tcs.core
-0.3.0 or later.
+0.4.0 or later.
 
 ```powershell
 Install-Module Pester -RequiredVersion 5.7.1 -Scope CurrentUser -SkipPublisherCheck
 Install-Module PSScriptAnalyzer -RequiredVersion 1.23.0 -Scope CurrentUser
-Install-Module tcs.core -MinimumVersion 0.3.0 -Scope CurrentUser
+Install-Module tcs.core -MinimumVersion 0.4.0 -Scope CurrentUser
 
 # Keep test runs offline and away from your profile
 $env:TCS_SKIP_UPDATE_CHECK = '1'
@@ -50,10 +50,14 @@ Every file in `Public/` must also be listed in `FunctionsToExport` in `tcs.confl
   and **warnings fail the build**. Suppress a rule only with a written justification.
 - **State-changing functions** (`New-`, `Set-`, `Update-`, `Remove-` against Confluence) support
   `-WhatIf`/`-Confirm`; `Remove-` functions use `ConfirmImpact = 'High'`.
-- **Telemetry:** every exported function reports telemetry through tcs.core with the
-  `$TelemetryArgs` / `Invoke-TelemetryCollection -Stage Start` ... `-Stage End` pattern used by
-  the existing functions (a failure sends `-Stage End -Failed $true -Exception $_`).
-  `tests/Telemetry.Tests.ps1` fails for an exported function that does not.
+- **Telemetry:** every exported function reports telemetry with the tcs.core token API:
+  `$telemetry = Start-TcsTelemetry`, then the body in `try`, with
+  `Complete-TcsTelemetry -Token $telemetry -ErrorRecord $_` in `catch` and
+  `Complete-TcsTelemetry -Token $telemetry` in `finally` (pipeline functions start the token in
+  `begin`, catch in `process` and complete it in `end`). Do not use `Invoke-TcsCommand`: it stops
+  `-WarningVariable`, `-InformationVariable` and silenced `-ErrorVariable` from collecting what
+  the command writes. `tests/Telemetry.Tests.ps1` fails for an exported function that does not
+  follow this pattern.
 - **Help:** every exported function has comment-based help with a synopsis, description,
   every parameter and at least one example.
 - **Tests:** new behaviour and bug fixes come with Pester tests. Tests must not touch the real

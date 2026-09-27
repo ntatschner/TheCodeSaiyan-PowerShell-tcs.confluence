@@ -1,6 +1,6 @@
 @{
     RootModule           = 'tcs.confluence.psm1'
-    ModuleVersion        = '0.2.0'
+    ModuleVersion        = '0.3.0'
     GUID                 = '8e75db44-4f93-4ab4-b151-06ec760efb21'
     Author               = 'Nigel Tatschner'
     CompanyName          = 'TheCodeSaiyan'

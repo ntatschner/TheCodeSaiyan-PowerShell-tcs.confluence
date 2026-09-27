@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-27
+
+### Changed
+
+- Requires tcs.core 0.4.0 or later.
+- Telemetry: every exported command reports its run through the tcs.core token API
+  (`Start-TcsTelemetry` / `Complete-TcsTelemetry`) instead of its own copy of the
+  `Invoke-TelemetryCollection` block. When a command calls another exported tcs.confluence
+  command (for example `Get-ConfluencePage` and the other REST commands calling
+  `Invoke-ConfluenceRequest`), only the outer command is recorded now; before, the inner command
+  sent its own event as well. Output, warnings, errors
+  and the `-ErrorVariable`/`-WarningVariable` common parameters are unchanged.
+- Requests: 429 Too Many Requests is retried with tcs.core `Invoke-WithRetry`, and HTTP errors
+  thrown by Windows PowerShell 5.1 are read with `Get-HttpErrorDetail`. The retry rules are the
+  same as before: only 429 is retried, at most four times, waiting for the `Retry-After` header
+  (seconds or an HTTP date, at most 60 seconds) or 2, 4, 8 and 16 seconds without it. Other
+  statuses and transport failures (DNS, TLS, timeouts) are not retried, and the error messages
+  are unchanged.
+- The Basic Authorization header is built for each request with tcs.core `New-BasicAuthHeader`
+  (the private `Get-ConfluenceAuthHeader` helper is removed). The credential is still kept only
+  in memory and never written to any stream.
+
 ## [0.2.0] - 2026-09-24
 
 ### Breaking
