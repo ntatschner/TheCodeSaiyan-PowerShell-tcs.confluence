@@ -15,12 +15,12 @@ Creates a Confluence page layout with one or more sections of one to three colum
 ### Single (Default)
 ```
 New-ConfluencePageLayout [-LayoutType] <String> [-SectionOne] <String> [[-SectionTwo] <String>]
- [[-SectionThree] <String>] [-ProgressAction <ActionPreference>] [<CommonParameters>]
+ [[-SectionThree] <String>] [<CommonParameters>]
 ```
 
 ### Multiple
 ```
-New-ConfluencePageLayout -Section <Hashtable[]> [-ProgressAction <ActionPreference>] [<CommonParameters>]
+New-ConfluencePageLayout -Section <Hashtable[]> [<CommonParameters>]
 ```
 
 ## DESCRIPTION
@@ -129,21 +129,6 @@ Parameter Sets: Multiple
 Aliases:
 
 Required: True
-Position: Named
-Default value: None
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
-### -ProgressAction
-{{ Fill ProgressAction Description }}
-
-```yaml
-Type: ActionPreference
-Parameter Sets: (All)
-Aliases: proga
-
-Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False

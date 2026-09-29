@@ -14,7 +14,7 @@ Searches Confluence with a CQL query.
 
 ```
 Search-ConfluenceContent [-Cql] <String> [-Limit <Int32>] [-MaxQueryPages <Int16>] [-All] [-Expand <String[]>]
- [-ProgressAction <ActionPreference>] [<CommonParameters>]
+ [<CommonParameters>]
 ```
 
 ## DESCRIPTION
@@ -118,21 +118,6 @@ Properties to expand in the results, for example content.space or content.versio
 Type: String[]
 Parameter Sets: (All)
 Aliases:
-
-Required: False
-Position: Named
-Default value: None
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
-### -ProgressAction
-{{ Fill ProgressAction Description }}
-
-```yaml
-Type: ActionPreference
-Parameter Sets: (All)
-Aliases: proga
 
 Required: False
 Position: Named

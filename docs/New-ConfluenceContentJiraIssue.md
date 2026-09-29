@@ -15,13 +15,13 @@ Creates a Confluence Jira macro for one issue or a JQL query.
 ### Issue (Default)
 ```
 New-ConfluenceContentJiraIssue -IssueKey <String> [-ShowSummary <Boolean>] [-Server <String>]
- [-ServerId <String>] [-ProgressAction <ActionPreference>] [<CommonParameters>]
+ [-ServerId <String>] [<CommonParameters>]
 ```
 
 ### Jql
 ```
 New-ConfluenceContentJiraIssue -JqlQuery <String> [-Columns <String[]>] [-MaximumIssues <Int32>]
- [-Server <String>] [-ServerId <String>] [-ProgressAction <ActionPreference>] [<CommonParameters>]
+ [-Server <String>] [-ServerId <String>] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
@@ -152,21 +152,6 @@ The ID of the Jira application link.
 Type: String
 Parameter Sets: (All)
 Aliases:
-
-Required: False
-Position: Named
-Default value: None
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
-### -ProgressAction
-{{ Fill ProgressAction Description }}
-
-```yaml
-Type: ActionPreference
-Parameter Sets: (All)
-Aliases: proga
 
 Required: False
 Position: Named

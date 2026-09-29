@@ -13,7 +13,7 @@ Converts simple Markdown to HTML for a Confluence page body.
 ## SYNTAX
 
 ```
-ConvertTo-ConfluenceHTML [-InputContent] <String> [-InputFormat] <String> [-ProgressAction <ActionPreference>]
+ConvertTo-ConfluenceHTML [-InputContent] <String> [-InputFormat] <String>
  [<CommonParameters>]
 ```
 
@@ -76,21 +76,6 @@ Aliases:
 
 Required: True
 Position: 2
-Default value: None
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
-### -ProgressAction
-{{ Fill ProgressAction Description }}
-
-```yaml
-Type: ActionPreference
-Parameter Sets: (All)
-Aliases: proga
-
-Required: False
-Position: Named
 Default value: None
 Accept pipeline input: False
 Accept wildcard characters: False

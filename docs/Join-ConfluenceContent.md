@@ -13,7 +13,7 @@ Joins blocks of Confluence content with a separator.
 ## SYNTAX
 
 ```
-Join-ConfluenceContent [-ContentBlocks] <String[]> [[-Separator] <String>] [-ProgressAction <ActionPreference>]
+Join-ConfluenceContent [-ContentBlocks] <String[]> [[-Separator] <String>]
  [<CommonParameters>]
 ```
 
@@ -61,21 +61,6 @@ Aliases:
 Required: False
 Position: 2
 Default value: NewLine
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
-### -ProgressAction
-{{ Fill ProgressAction Description }}
-
-```yaml
-Type: ActionPreference
-Parameter Sets: (All)
-Aliases: proga
-
-Required: False
-Position: Named
-Default value: None
 Accept pipeline input: False
 Accept wildcard characters: False
 ```

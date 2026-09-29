@@ -15,13 +15,13 @@ Gets Confluence pages including their body in the requested format.
 ### ById (Default)
 ```
 Get-ConfluencePageContent -PageId <String> [-ResultsLimit <Int32>] [-MaxQueryPages <Int16>]
- [-ContentType <String>] [-ProgressAction <ActionPreference>] [<CommonParameters>]
+ [-ContentType <String>] [<CommonParameters>]
 ```
 
 ### Search
 ```
 Get-ConfluencePageContent [-SpaceKey <String>] [-Title <String>] [-ResultsLimit <Int32>]
- [-MaxQueryPages <Int16>] [-All] [-ContentType <String>] [-ProgressAction <ActionPreference>]
+ [-MaxQueryPages <Int16>] [-All] [-ContentType <String>]
  [<CommonParameters>]
 ```
 
@@ -164,21 +164,6 @@ Aliases:
 Required: False
 Position: Named
 Default value: Storage
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
-### -ProgressAction
-{{ Fill ProgressAction Description }}
-
-```yaml
-Type: ActionPreference
-Parameter Sets: (All)
-Aliases: proga
-
-Required: False
-Position: Named
-Default value: None
 Accept pipeline input: False
 Accept wildcard characters: False
 ```

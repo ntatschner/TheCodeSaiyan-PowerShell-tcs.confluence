@@ -17,7 +17,7 @@ New-ConfluenceContentTable [-TableData] <Array> [[-TableType] <String>] [[-Table
  [-NoHeader] [[-HeaderStringFormatting] <String[]>] [[-HeaderAlignmentFormatting] <String>] [-VerticalHeader]
  [[-CellStringFormatting] <String[]>] [[-CellAlignmentFormatting] <String>] [[-FirstCellHeaderFormat] <String>]
  [[-FirstCellStringFormatting] <String[]>] [[-FirstCellAlignmentFormatting] <String>] [-Raw]
- [-ProgressAction <ActionPreference>] [<CommonParameters>]
+ [<CommonParameters>]
 ```
 
 ## DESCRIPTION
@@ -262,21 +262,6 @@ Aliases:
 Required: False
 Position: Named
 Default value: False
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
-### -ProgressAction
-{{ Fill ProgressAction Description }}
-
-```yaml
-Type: ActionPreference
-Parameter Sets: (All)
-Aliases: proga
-
-Required: False
-Position: Named
-Default value: None
 Accept pipeline input: False
 Accept wildcard characters: False
 ```

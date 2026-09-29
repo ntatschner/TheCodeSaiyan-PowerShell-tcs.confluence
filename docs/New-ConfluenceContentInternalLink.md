@@ -15,19 +15,19 @@ Creates a link to a Confluence page, optionally to a heading on that page.
 ### PageTitle (Default)
 ```
 New-ConfluenceContentInternalLink -PageTitle <String> [-SpaceKey <String>] [-HeadingLink <String>]
- [-LinkText <String>] [-ProgressAction <ActionPreference>] [<CommonParameters>]
+ [-LinkText <String>] [<CommonParameters>]
 ```
 
 ### InternalLinkURL
 ```
 New-ConfluenceContentInternalLink [-PageTitle <String>] -InternalLinkURL <String> [-HeadingLink <String>]
- [-LinkText <String>] [-ProgressAction <ActionPreference>] [<CommonParameters>]
+ [-LinkText <String>] [<CommonParameters>]
 ```
 
 ### InternalLinkPageId
 ```
 New-ConfluenceContentInternalLink -PageId <String> [-AsUrl] [-HeadingLink <String>] [-LinkText <String>]
- [-ProgressAction <ActionPreference>] [<CommonParameters>]
+ [<CommonParameters>]
 ```
 
 ## DESCRIPTION
@@ -192,21 +192,6 @@ Defaults to the page title (URL mode: the URL).
 Type: String
 Parameter Sets: (All)
 Aliases:
-
-Required: False
-Position: Named
-Default value: None
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
-### -ProgressAction
-{{ Fill ProgressAction Description }}
-
-```yaml
-Type: ActionPreference
-Parameter Sets: (All)
-Aliases: proga
 
 Required: False
 Position: Named

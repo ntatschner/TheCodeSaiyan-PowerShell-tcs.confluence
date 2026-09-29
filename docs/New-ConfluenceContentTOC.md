@@ -14,7 +14,7 @@ Creates a Confluence table of contents macro.
 
 ```
 New-ConfluenceContentTOC [-HorizontalList] [[-BulletPointStyle] <String>] [[-HeadersFromLevel] <Int32>]
- [[-HeadersToLevel] <Int32>] [-IncludeSectionNumbers] [-ProgressAction <ActionPreference>] [<CommonParameters>]
+ [[-HeadersToLevel] <Int32>] [-IncludeSectionNumbers] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
@@ -106,21 +106,6 @@ Aliases:
 Required: False
 Position: Named
 Default value: False
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
-### -ProgressAction
-{{ Fill ProgressAction Description }}
-
-```yaml
-Type: ActionPreference
-Parameter Sets: (All)
-Aliases: proga
-
-Required: False
-Position: Named
-Default value: None
 Accept pipeline input: False
 Accept wildcard characters: False
 ```

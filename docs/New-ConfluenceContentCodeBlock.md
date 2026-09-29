@@ -14,7 +14,7 @@ Creates a Confluence code block macro.
 
 ```
 New-ConfluenceContentCodeBlock [-Content] <String> [[-Language] <String>] [[-Theme] <String>] [-LineNumbers]
- [[-Collapse] <Boolean>] [-ProgressAction <ActionPreference>] [<CommonParameters>]
+ [[-Collapse] <Boolean>] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
@@ -106,21 +106,6 @@ Aliases:
 Required: False
 Position: 4
 Default value: False
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
-### -ProgressAction
-{{ Fill ProgressAction Description }}
-
-```yaml
-Type: ActionPreference
-Parameter Sets: (All)
-Aliases: proga
-
-Required: False
-Position: Named
-Default value: None
 Accept pipeline input: False
 Accept wildcard characters: False
 ```

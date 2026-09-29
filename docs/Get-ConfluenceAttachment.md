@@ -13,7 +13,7 @@ Gets the attachments of a Confluence page.
 ## SYNTAX
 
 ```
-Get-ConfluenceAttachment [-PageId] <String> [[-FileName] <String>] [-ProgressAction <ActionPreference>]
+Get-ConfluenceAttachment [-PageId] <String> [[-FileName] <String>]
  [<CommonParameters>]
 ```
 
@@ -60,21 +60,6 @@ Aliases:
 
 Required: False
 Position: 2
-Default value: None
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
-### -ProgressAction
-{{ Fill ProgressAction Description }}
-
-```yaml
-Type: ActionPreference
-Parameter Sets: (All)
-Aliases: proga
-
-Required: False
-Position: Named
 Default value: None
 Accept pipeline input: False
 Accept wildcard characters: False

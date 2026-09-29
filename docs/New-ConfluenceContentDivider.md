@@ -13,7 +13,7 @@ Creates a divider (horizontal rule or blank paragraph) for a Confluence page.
 ## SYNTAX
 
 ```
-New-ConfluenceContentDivider [[-Type] <String>] [-ProgressAction <ActionPreference>] [<CommonParameters>]
+New-ConfluenceContentDivider [[-Type] <String>] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
@@ -42,21 +42,6 @@ Aliases:
 Required: False
 Position: 1
 Default value: Line
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
-### -ProgressAction
-{{ Fill ProgressAction Description }}
-
-```yaml
-Type: ActionPreference
-Parameter Sets: (All)
-Aliases: proga
-
-Required: False
-Position: Named
-Default value: None
 Accept pipeline input: False
 Accept wildcard characters: False
 ```

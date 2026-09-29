@@ -15,7 +15,7 @@ Sends a request to the Confluence REST API using the current Confluence context.
 ```
 Invoke-ConfluenceRequest [-Method] <String> [[-URIPath] <String>] [[-Resource] <String>]
  [[-ApiVersion] <Int32>] [[-Id] <String>] [-RawPath] [[-Body] <String>] [[-Query] <Hashtable>]
- [[-MaxQueryPages] <Int16>] [-All] [[-Search] <String>] [-ProgressAction <ActionPreference>]
+ [[-MaxQueryPages] <Int16>] [-All] [[-Search] <String>]
  [<CommonParameters>]
 ```
 
@@ -244,21 +244,6 @@ Aliases:
 
 Required: False
 Position: 9
-Default value: None
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
-### -ProgressAction
-{{ Fill ProgressAction Description }}
-
-```yaml
-Type: ActionPreference
-Parameter Sets: (All)
-Aliases: proga
-
-Required: False
-Position: Named
 Default value: None
 Accept pipeline input: False
 Accept wildcard characters: False

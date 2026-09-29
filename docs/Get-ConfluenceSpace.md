@@ -15,12 +15,12 @@ Gets Confluence spaces, optionally filtered by name.
 ### AllSpaces (Default)
 ```
 Get-ConfluenceSpace [-Search <String>] [-ResultsLimit <Int32>] [-MaxQueryPages <Int16>]
- [-ProgressAction <ActionPreference>] [<CommonParameters>]
+ [<CommonParameters>]
 ```
 
 ### SpaceId
 ```
-Get-ConfluenceSpace -SpaceId <String> [-ProgressAction <ActionPreference>] [<CommonParameters>]
+Get-ConfluenceSpace -SpaceId <String> [<CommonParameters>]
 ```
 
 ## DESCRIPTION
@@ -109,21 +109,6 @@ Aliases:
 Required: False
 Position: Named
 Default value: 3
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
-### -ProgressAction
-{{ Fill ProgressAction Description }}
-
-```yaml
-Type: ActionPreference
-Parameter Sets: (All)
-Aliases: proga
-
-Required: False
-Position: Named
-Default value: None
 Accept pipeline input: False
 Accept wildcard characters: False
 ```

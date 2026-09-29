@@ -14,13 +14,13 @@ Creates a hyperlink, or turns every URL in a block of text into a hyperlink.
 
 ### Url (Default)
 ```
-New-ConfluenceContentLink [-LinkText <String>] -Url <String> [-ProgressAction <ActionPreference>]
+New-ConfluenceContentLink [-LinkText <String>] -Url <String>
  [<CommonParameters>]
 ```
 
 ### TextBlock
 ```
-New-ConfluenceContentLink -TextBlock <String> [-ProgressAction <ActionPreference>] [<CommonParameters>]
+New-ConfluenceContentLink -TextBlock <String> [<CommonParameters>]
 ```
 
 ## DESCRIPTION
@@ -91,21 +91,6 @@ Parameter Sets: TextBlock
 Aliases:
 
 Required: True
-Position: Named
-Default value: None
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
-### -ProgressAction
-{{ Fill ProgressAction Description }}
-
-```yaml
-Type: ActionPreference
-Parameter Sets: (All)
-Aliases: proga
-
-Required: False
 Position: Named
 Default value: None
 Accept pipeline input: False

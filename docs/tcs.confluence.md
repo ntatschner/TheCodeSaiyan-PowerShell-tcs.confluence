@@ -1,14 +1,14 @@
 ---
 Module Name: tcs.confluence
-Module Guid: {{ Update Module Guid }}
-Download Help Link: {{ Update Download Link }}
-Help Version: {{ Update Help Version }}
-Locale: {{ Update Locale }}
+Module Guid: 8e75db44-4f93-4ab4-b151-06ec760efb21
+Download Help Link: 
+Help Version: 0.3.0
+Locale: en-GB
 ---
 
 # tcs.confluence Module
 ## Description
-{{ Fill in the Description }}
+Functions to work with Confluence Cloud: a REST client (pages, spaces, search, labels and attachments) and builders for Confluence storage-format content such as headings, tables, code blocks, links, layouts and tables of contents.
 
 ## tcs.confluence Cmdlets
 ### [Add-ConfluenceAttachment](Add-ConfluenceAttachment.md)

@@ -13,7 +13,7 @@ Gets the child pages of a Confluence page, or with -Recurse all pages below it.
 ## SYNTAX
 
 ```
-Get-ConfluencePageChild [-PageId] <String> [-Recurse] [-ProgressAction <ActionPreference>] [<CommonParameters>]
+Get-ConfluencePageChild [-PageId] <String> [-Recurse] [<CommonParameters>]
 ```
 
 ## DESCRIPTION
@@ -69,21 +69,6 @@ Aliases:
 Required: False
 Position: Named
 Default value: False
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
-### -ProgressAction
-{{ Fill ProgressAction Description }}
-
-```yaml
-Type: ActionPreference
-Parameter Sets: (All)
-Aliases: proga
-
-Required: False
-Position: Named
-Default value: None
 Accept pipeline input: False
 Accept wildcard characters: False
 ```

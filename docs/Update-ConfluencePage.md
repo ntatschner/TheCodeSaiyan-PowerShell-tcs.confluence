@@ -14,7 +14,7 @@ Replaces the title and body of a Confluence page.
 
 ```
 Update-ConfluencePage [-PageId] <String> [[-SpaceId] <String>] [-Title] <String> [[-Status] <String>]
- [-Content] <String> [[-Version] <Int32>] [[-VersionMessage] <String>] [-ProgressAction <ActionPreference>]
+ [-Content] <String> [[-Version] <Int32>] [[-VersionMessage] <String>]
  [-WhatIf] [-Confirm] [<CommonParameters>]
 ```
 
@@ -183,21 +183,6 @@ Prompts you for confirmation before running the cmdlet.
 Type: SwitchParameter
 Parameter Sets: (All)
 Aliases: cf
-
-Required: False
-Position: Named
-Default value: None
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
-### -ProgressAction
-{{ Fill ProgressAction Description }}
-
-```yaml
-Type: ActionPreference
-Parameter Sets: (All)
-Aliases: proga
 
 Required: False
 Position: Named

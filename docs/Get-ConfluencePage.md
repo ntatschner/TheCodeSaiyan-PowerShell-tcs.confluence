@@ -15,13 +15,13 @@ Gets Confluence pages by ID, by space or by title.
 ### AllPages (Default)
 ```
 Get-ConfluencePage [-SpaceKey <String>] [-Search <String>] [-ResultsLimit <Int32>] [-MaxQueryPages <Int16>]
- [-All] [-ProgressAction <ActionPreference>] [<CommonParameters>]
+ [-All] [<CommonParameters>]
 ```
 
 ### PageId
 ```
 Get-ConfluencePage -PageId <String> [-ResultsLimit <Int32>] [-MaxQueryPages <Int16>]
- [-ProgressAction <ActionPreference>] [<CommonParameters>]
+ [<CommonParameters>]
 ```
 
 ## DESCRIPTION
@@ -154,21 +154,6 @@ Aliases:
 Required: False
 Position: Named
 Default value: False
-Accept pipeline input: False
-Accept wildcard characters: False
-```
-
-### -ProgressAction
-{{ Fill ProgressAction Description }}
-
-```yaml
-Type: ActionPreference
-Parameter Sets: (All)
-Aliases: proga
-
-Required: False
-Position: Named
-Default value: None
 Accept pipeline input: False
 Accept wildcard characters: False
 ```
